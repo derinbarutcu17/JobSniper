@@ -30,7 +30,7 @@ Current foundation:
 - first-class run records
 - role-pack-driven search and scoring
 - adapter-style Google Sheets sync
-- CLI and OpenClaw skill as presentation layers over the engine
+- CLI and OpenClaw/AI Agent skill as presentation layers over the engine
 
 That means the repo is no longer “just a CLI tool.” It is a local domain engine that can later power:
 
@@ -68,7 +68,7 @@ without needing to untangle the core logic again.
 
 ## Talk to It
 
-If you are using OpenClaw, you do not need to think in CLI terms most of the time.
+If you are using an AI Agent, you do not need to think in CLI terms most of the time.
 
 You can say things like:
 
@@ -83,7 +83,7 @@ The skill command is:
 /sniper
 ```
 
-If your OpenClaw surface only exposes skill-wrapper commands, use:
+If your AI Agent surface only exposes skill-wrapper commands, use:
 
 ```text
 /skill sniper run
@@ -346,7 +346,7 @@ This lets you manage the browser-visible board directly while keeping SQLite as 
 
 ## AI and Browser Workflows
 
-### OpenClaw + Sheets
+### OpenClaw (or other AI Agents) + Sheets
 
 Use Job Sniper to produce the data, then use the sheet as the live board:
 
