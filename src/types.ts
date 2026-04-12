@@ -33,6 +33,17 @@ export type PriorityBand = "low" | "medium" | "high";
 export type ContactChannel = "email" | "linkedin" | "ats" | "founder";
 export type OutcomeResult = "no_reply" | "reply" | "call" | "interview" | "rejected" | "positive_signal";
 export type RunStatus = "running" | "succeeded" | "failed" | "partial";
+export type PipelineStatus =
+  | "discovered"
+  | "triaged"
+  | "asset_ready"
+  | "applied"
+  | "contacted"
+  | "reply_received"
+  | "interviewing"
+  | "rejected"
+  | "archived";
+export type ApplicationMethod = "ats" | "direct_email" | "founder_reachout" | "linkedin" | "other";
 
 export interface RolePackTitleFamily {
   family: string;
@@ -399,6 +410,14 @@ export interface JobRecord {
   outreach_leverage_score: number;
   interview_probability_band: ProbabilityBand;
   opportunity_cost_band: ProbabilityBand;
+  pipeline_status: PipelineStatus;
+  applied_at: string;
+  application_method: ApplicationMethod | "";
+  application_url: string;
+  asset_bundle_path: string;
+  cv_asset_path: string;
+  cover_letter_asset_path: string;
+  outreach_note_asset_path: string;
 }
 
 export interface RunSummary {
@@ -472,6 +491,7 @@ export interface JobSummary {
   workModel: WorkModel;
   postedAt: string;
   url: string;
+  pipelineStatus: PipelineStatus;
 }
 
 export interface JobDetail extends JobSummary {
@@ -489,6 +509,13 @@ export interface JobDetail extends JobSummary {
   explanation: DecisionExplanation;
   publicContacts: ContactCandidate[];
   sourceUrls: string[];
+  appliedAt: string;
+  applicationMethod: ApplicationMethod | "";
+  applicationUrl: string;
+  assetBundlePath: string;
+  cvAssetPath: string;
+  coverLetterAssetPath: string;
+  outreachNoteAssetPath: string;
 }
 
 export interface JobDetailView extends JobDetail {}
@@ -496,6 +523,20 @@ export interface JobDetailView extends JobDetail {}
 export interface TriageItem extends JobSummary {
   recommendationReason: string;
   outreachLeverageScore: number;
+}
+
+export interface AssetBundleView {
+  jobId: number;
+  bundlePath: string;
+  cvPath: string;
+  coverLetterPath: string;
+  outreachNotePath: string;
+}
+
+export interface PipelineResult {
+  job: JobDetailView;
+  assets?: AssetBundleView;
+  updatedStatus: PipelineStatus;
 }
 
 export interface CompanySummary {
@@ -643,6 +684,19 @@ export interface OutcomeLogEntry {
   result: OutcomeResult;
   note: string;
   created_at: string;
+}
+
+export interface ApplicationRecord {
+  id: number;
+  job_id: number;
+  company_id: number | null;
+  status: PipelineStatus;
+  method: ApplicationMethod;
+  submitted_at: string;
+  last_updated_at: string;
+  notes: string;
+  source: string;
+  asset_bundle_path: string;
 }
 
 export interface HttpResponseLike {

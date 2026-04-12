@@ -143,7 +143,7 @@
       "cto",
       "cfo"
     ],
-    "titleTerms": ["senior", "lead", "manager", "director", "head", "vp", "principal", "staff", "founder", "founding", "co-founder", "cofounder"],
+    "titleTerms": ["senior", "lead", "manager", "director", "head", "vp", "principal", "staff", "founder", "co-founder", "cofounder"],
     "softPenaltyTerms": ["stakeholder management", "people management", "budget ownership", "consulting"],
     "lanes": {
       "design_jobs": [],

@@ -55,6 +55,8 @@ describe("legacy migration", () => {
     const contactLogTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'contact_log'").get() as { name: string } | undefined;
     const outcomeLogTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'outcome_log'").get() as { name: string } | undefined;
     const runsTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'runs'").get() as { name: string } | undefined;
+    const applicationsTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'applications'").get() as { name: string } | undefined;
+    const applicationEventsTable = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'application_events'").get() as { name: string } | undefined;
     const runMetricColumns = db.prepare("PRAGMA table_info(run_metrics)").all() as Array<{ name: string }>;
 
     expect(job.title).toBe("Product Designer");
@@ -66,7 +68,11 @@ describe("legacy migration", () => {
     expect(contactLogTable?.name).toBe("contact_log");
     expect(outcomeLogTable?.name).toBe("outcome_log");
     expect(runsTable?.name).toBe("runs");
+    expect(applicationsTable?.name).toBe("applications");
+    expect(applicationEventsTable?.name).toBe("application_events");
     expect(runMetricColumns.some((column) => column.name === "run_id")).toBe(true);
+    expect(jobColumns.some((column) => column.name === "pipeline_status")).toBe(true);
+    expect(jobColumns.some((column) => column.name === "asset_bundle_path")).toBe(true);
   });
 
   it("keeps company merges additive and prefers normalized URLs for job keys", () => {
@@ -281,5 +287,80 @@ describe("legacy migration", () => {
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.canonical_key).toContain("https-jobs-example-com-role");
     expect(jobs[0]?.score).toBe(82);
+  });
+
+  it("replaces generic seeded startup labels with stronger enrichment evidence", () => {
+    const baseDir = makeTempDir();
+    const { db } = openDatabase(baseDir);
+
+    upsertCompany(db, {
+      canonicalKey: "company:stage-test",
+      name: "Stage Test",
+      domain: "stagetest.ai",
+      location: "Berlin",
+      companyUrl: "https://stagetest.ai",
+      careersUrl: "",
+      aboutUrl: "",
+      teamUrl: "",
+      contactUrl: "",
+      pressUrl: "",
+      linkedinUrl: "",
+      description: "seed row",
+      sourceUrls: ["https://stagetest.ai"],
+      publicContacts: [],
+      startupSignals: ["startup_language"],
+      hiringSignals: [],
+      founderNames: [],
+      cities: ["Berlin"],
+      sizeBand: "",
+      stageText: "Berlin startup list",
+      remotePolicy: "",
+      openRoleCount: 0,
+      startupScore: 14,
+      companyFitScore: 4,
+      hiringSignalScore: 0,
+      contactabilityScore: 0,
+      isStartupCandidate: true,
+      lastSeenAt: new Date().toISOString(),
+    });
+
+    upsertCompany(db, {
+      canonicalKey: "company:stage-test",
+      name: "Stage Test",
+      domain: "stagetest.ai",
+      location: "Berlin",
+      companyUrl: "https://stagetest.ai",
+      careersUrl: "",
+      aboutUrl: "",
+      teamUrl: "",
+      contactUrl: "",
+      pressUrl: "",
+      linkedinUrl: "",
+      description: "current company site",
+      sourceUrls: ["https://stagetest.ai/about"],
+      publicContacts: [],
+      startupSignals: [],
+      hiringSignals: [],
+      founderNames: [],
+      cities: ["Berlin"],
+      sizeBand: "201-500",
+      stageText: "",
+      remotePolicy: "",
+      openRoleCount: 0,
+      startupScore: 8,
+      companyFitScore: 4,
+      hiringSignalScore: 0,
+      contactabilityScore: 0,
+      isStartupCandidate: false,
+      lastSeenAt: new Date().toISOString(),
+    });
+
+    const company = db
+      .prepare("SELECT stage_text, startup_score, is_startup_candidate FROM companies WHERE canonical_key = 'company:stage-test'")
+      .get() as { stage_text: string; startup_score: number; is_startup_candidate: number };
+
+    expect(company.stage_text).toBe("");
+    expect(company.startup_score).toBe(8);
+    expect(company.is_startup_candidate).toBe(0);
   });
 });

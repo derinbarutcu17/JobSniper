@@ -1,8 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { deriveProfileSummary, onboardProfile } from "../src/profile.js";
 import { makeTempDir } from "./helpers.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("profile seniority parsing", () => {
   it("treats explicit no-senior wording as junior target", () => {
@@ -26,5 +30,33 @@ describe("profile seniority parsing", () => {
     const baseDir = makeTempDir();
     await expect(onboardProfile(baseDir, "/no/such/file.pdf")).rejects.toThrow("Profile file was not found");
     expect(fs.existsSync(path.join(baseDir, "profile", "cv.md"))).toBe(false);
+  });
+
+  it("can onboard from a profile URL", async () => {
+    const baseDir = makeTempDir();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          `
+            <html>
+              <head>
+                <title>Derin Portfolio</title>
+                <meta name="description" content="Berlin product designer and frontend builder" />
+              </head>
+              <body>
+                <main>Design systems, React, TypeScript, AI workflows, Berlin.</main>
+              </body>
+            </html>
+          `,
+          { status: 200, headers: { "content-type": "text/html" } },
+        ),
+      ),
+    );
+
+    const result = await onboardProfile(baseDir, "https://example.com/portfolio");
+    expect(result.profile.toolSignals).toContain("react");
+    expect(result.profile.preferredLocations).toContain("Berlin");
+    expect(fs.readFileSync(path.join(baseDir, "profile", "cv.md"), "utf8")).toContain("Derin Portfolio");
   });
 });

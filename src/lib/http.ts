@@ -18,6 +18,12 @@ function challengeDetected(status: number, body: string, url: string): boolean {
   const lower = body.toLowerCase();
   return (
     status === 403 ||
+    status === 429 ||
+    ((status === 401 || status === 503) &&
+      (lower.includes("cloudflare") ||
+        lower.includes("datadome") ||
+        lower.includes("captcha") ||
+        lower.includes("challenge"))) ||
     (/wellfound\.com/i.test(url) &&
       (lower.includes("please enable js") ||
         lower.includes("disable any ad blocker") ||
@@ -72,11 +78,24 @@ async function browserFetch(input: string): Promise<HttpResponseLike | null> {
   }
 }
 
+async function timedFetch(input: string, init: RequestInit = {}, ms = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`fetch(${input}) timed out after ${ms}ms`)), ms);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function createDefaultDependencies(): Dependencies {
   return {
     fetch: async (input, init) => {
-      const response = await withTimeout(
-        fetch(input, {
+      try {
+        const response = await timedFetch(input, {
           ...init,
           headers: {
             "user-agent": USER_AGENT,
@@ -84,21 +103,23 @@ export function createDefaultDependencies(): Dependencies {
             "accept-language": "en-US,en;q=0.9,tr-TR;q=0.8,tr;q=0.7",
             ...(init?.headers ?? {}),
           },
-        }),
-        15000,
-        `fetch(${input})`,
-      );
-      const body = await response.text();
-      if (challengeDetected(response.status, body, input)) {
+        });
+        const body = await response.text();
+        if (challengeDetected(response.status, body, input)) {
+          const fallback = await browserFetch(input);
+          if (fallback) return fallback;
+        }
+        return {
+          ok: response.ok,
+          status: response.status,
+          text: async () => body,
+          json: async () => JSON.parse(body),
+        };
+      } catch (error) {
         const fallback = await browserFetch(input);
         if (fallback) return fallback;
+        throw error;
       }
-      return {
-        ok: response.ok,
-        status: response.status,
-        text: async () => body,
-        json: async () => JSON.parse(body),
-      };
     },
     now: () => new Date(),
   };

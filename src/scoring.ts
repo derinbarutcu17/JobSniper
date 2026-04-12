@@ -9,7 +9,7 @@ import type {
   SniperConfig,
 } from "./types.js";
 
-const ALWAYS_EXCLUDE_TITLE_TERMS = [
+const SYSTEM_EXCLUDE_TITLE_TERMS = [
   "senior",
   "lead",
   "manager",
@@ -18,9 +18,6 @@ const ALWAYS_EXCLUDE_TITLE_TERMS = [
   "vp",
   "principal",
   "staff",
-  "founder",
-  "co-founder",
-  "cofounder",
   "cto",
   "cso",
   "chief ",
@@ -87,16 +84,23 @@ function gateEligibility(config: SniperConfig, profile: ProfileSummary, listing:
     gatesFailed: [],
   };
 
+  const excludedTitleTerms = [
+    ...new Set(
+      [...SYSTEM_EXCLUDE_TITLE_TERMS, ...config.blacklist.titleTerms, ...profile.avoidTitleTerms]
+        .map((term) => normalizeText(term))
+        .filter(Boolean),
+    ),
+  ];
+
   if (config.blacklist.companies.some((company) => normalizeText(listing.company).includes(normalizeText(company)))) {
     breakdown.gatesFailed.push("company_blacklist");
   }
 
   if (
-    ALWAYS_EXCLUDE_TITLE_TERMS.some((term) => title.includes(normalizeText(term))) ||
-    profile.avoidTitleTerms.some((term) => title.includes(normalizeText(term)))
+    excludedTitleTerms.some((term) => title.includes(term))
   ) {
     breakdown.gatesFailed.push("title_seniority");
-    breakdown.negatives.push(`Title contains excluded seniority term: ${findFirstMatch(title, [...ALWAYS_EXCLUDE_TITLE_TERMS, ...profile.avoidTitleTerms])}`);
+    breakdown.negatives.push(`Title contains excluded seniority term: ${findFirstMatch(title, excludedTitleTerms)}`);
   } else {
     breakdown.gatesPassed.push("title_seniority");
   }

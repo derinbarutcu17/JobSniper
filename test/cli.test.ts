@@ -84,9 +84,9 @@ describe("cli", () => {
         'company:north', 'North', datetime('now'), datetime('now')
       );
       INSERT INTO jobs (
-        canonical_key, company_id, company_name, title, recommendation, recommended_route, route_confidence, pitch_theme, pitch_angle, created_at, updated_at
+        canonical_key, company_id, company_name, title, recommendation, recommended_route, route_confidence, pitch_theme, pitch_angle, url, created_at, updated_at
       ) VALUES (
-        'job:north-1', 1, 'North', 'Design Engineer', 'cold_email', 'direct_email_first', 0.8, 'design_engineering', 'Lead with hybrid design and code.', datetime('now'), datetime('now')
+        'job:north-1', 1, 'North', 'Design Engineer', 'cold_email', 'direct_email_first', 0.8, 'design_engineering', 'Lead with hybrid design and code.', 'https://jobs.example.com/north', datetime('now'), datetime('now')
       );
     `);
 
@@ -94,6 +94,9 @@ describe("cli", () => {
     expect(await runCli(["route", "1"], baseDir)).toContain("Recommended route");
     expect(await runCli(["pitch", "1"], baseDir)).toContain("Theme:");
     expect(await runCli(["dossier", "company:north"], baseDir)).toContain("Best route:");
+    expect(await runCli(["pipeline", "1"], baseDir)).toContain("Pipeline updated job");
+    expect(await runCli(["assets", "1"], baseDir)).toContain("Assets:");
+    expect(await runCli(["apply-state", "1", "--status", "applied", "--method", "ats"], baseDir)).toContain("Status: applied");
     expect(await runCli(["contact", "log", "company:north", "--channel", "email"], baseDir)).toContain("Logged contact attempt");
     expect(await runCli(["outcome", "log", "company:north", "--result", "reply"], baseDir)).toContain("Logged outcome");
     expect(await runCli(["experiments"], baseDir)).toContain("Route performance:");

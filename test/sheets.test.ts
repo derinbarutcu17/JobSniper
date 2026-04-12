@@ -169,9 +169,19 @@ describe("sheets sync", () => {
     expect(gateway.headers.get("Jobs")).toContain("manual_status");
     expect(gateway.headers.get("Jobs")).toContain("recommendation");
     expect(gateway.headers.get("Jobs")).toContain("recommended_route");
+    expect(gateway.headers.get("Jobs")).toContain("recommendation_reason");
+    expect(gateway.headers.get("Jobs")).toContain("route_rationale");
+    expect(gateway.headers.get("Jobs")).toContain("strongest_profile_signal");
+    expect(gateway.headers.get("Jobs")).toContain("apply_url");
     expect(gateway.headers.get("Companies")).toContain("best_route");
+    expect(gateway.headers.get("Companies")).toContain("recommendation_reason");
+    expect(gateway.headers.get("Companies")).toContain("pitch_evidence");
+    expect(gateway.headers.get("Companies")).toContain("startup_signals");
     expect(gateway.headers.get("RunMetrics")).toContain("total_discovered");
     expect(gateway.headers.get("RunMetrics")).toContain("actionable_count");
+    expect(gateway.headers.get("RunMetrics")).toContain("run_id");
+    expect(gateway.headers.get("RunMetrics")).toContain("status");
+    expect(gateway.headers.get("Contacts")).toContain("evidence_excerpt");
     expect(gateway.sheets.has("Jobs ")).toBe(false);
     expect(gateway.sheets.has("Jobs 2026-03-11")).toBe(true);
     expect(gateway.headers.get("Jobs 2026-03-11")).toContain("canonical_key");
@@ -276,6 +286,50 @@ describe("sheets sync", () => {
     db.prepare("DELETE FROM jobs").run();
     await syncSheets(baseDir, gateway);
     expect(gateway.sheets.has("Jobs 2026-03-10")).toBe(false);
+
+    if (previousSheetId) {
+      process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;
+    } else {
+      delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    }
+  });
+
+  it("uses contact-link fallback in company rows and can sync companies only", async () => {
+    const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
+    delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    const baseDir = makeTempDir();
+    const gateway = new FakeSheetGateway();
+    const { db } = openDatabase(baseDir);
+
+    db.exec(`
+      INSERT INTO companies (
+        canonical_key, name, domain, company_url, contact_url, public_contacts, created_at, updated_at
+      ) VALUES (
+        'company:modaai', 'ModaAI', 'moda.ai', 'https://moda.ai', 'https://moda.ai/contact', '[\"https://moda.ai\"]', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, email, contact_kind, confidence, created_at, updated_at
+      ) VALUES (
+        'contact:modaai', 1, 'hello@moda.ai', 'general_contact_email', 'high', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, email, contact_kind, confidence, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-support', 1, 'support@vendor.com', 'general_contact_email', 'high', datetime('now'), datetime('now')
+      );
+      INSERT INTO jobs (
+        canonical_key, company_name, title, created_at, updated_at
+      ) VALUES (
+        'job:test-1', 'ModaAI', 'Product Designer', datetime('now'), datetime('now')
+      );
+    `);
+
+    gateway.sheets.set("Jobs", [{ canonical_key: "job:test-1", owner_notes: "keep me" }]);
+    await syncSheets(baseDir, gateway, undefined, "companies_only");
+
+    expect((gateway.sheets.get("Companies") ?? [])[0]?.best_contact).toBe("hello@moda.ai");
+    expect(gateway.sheets.has("Jobs 2026-03-11")).toBe(false);
+    expect(gateway.sheets.get("Jobs")?.[0]?.owner_notes).toBe("keep me");
 
     if (previousSheetId) {
       process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;

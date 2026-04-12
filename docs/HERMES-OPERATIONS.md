@@ -64,6 +64,14 @@ npm test
 npm run sniper -- help
 ```
 
+Before any Hermes update or pull, make sure the working tree is clean:
+
+```bash
+git status --short
+```
+
+If it is not empty, commit or stash the local changes first. That keeps future update pulls from hitting restore conflicts.
+
 ### 2. Onboard profile manually
 
 Do this once, outside cron:

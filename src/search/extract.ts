@@ -44,12 +44,37 @@ function contactFromLink(link: string, sourceUrl: string, pageType: ContactCandi
   };
 }
 
+function sanitizeEmail(value: string): string {
+  return value.replace(/^mailto:/i, "").split("?")[0]!.trim();
+}
+
+function looksLikePlaceholderEmail(email: string): boolean {
+  const lower = email.toLowerCase();
+  return (
+    lower.endsWith("@example.com") ||
+    lower.endsWith("@company.com") ||
+    lower.includes("max.mustermann") ||
+    lower.includes("john.doe") ||
+    lower.includes("jane.doe") ||
+    /^name@/i.test(lower) ||
+    lower.includes("do-not-reply") ||
+    lower.includes("noreply") ||
+    lower.includes("no-reply") ||
+    lower.endsWith("@yourdomain.com") ||
+    lower.endsWith("@doe.com") ||
+    lower.endsWith("@tech.com") ||
+    lower.includes("sentry.io") ||
+    lower.includes("@2x") ||
+    /\.(png|jpg|jpeg|svg|webp|gif)$/i.test(lower)
+  );
+}
+
 function extractExplicitEmails(text: string): string[] {
   const emails = new Set<string>();
   const pattern = /(?:^|[^A-Z0-9._%+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![A-Z0-9._%+-])/gi;
   for (const match of text.matchAll(pattern)) {
     const email = match[1]?.trim();
-    if (email) {
+    if (email && !looksLikePlaceholderEmail(email)) {
       emails.add(email);
     }
   }
@@ -82,7 +107,8 @@ export function extractContacts(page: PageRecord): ContactCandidate[] {
     const text = $(element).text().trim();
     const lowerText = text.toLowerCase();
     if (href.startsWith("mailto:")) {
-      const email = href.replace(/^mailto:/, "").trim();
+      const email = sanitizeEmail(href);
+      if (looksLikePlaceholderEmail(email)) return;
       const kind =
         /(apply|career|job|cv)/i.test(text) ? "application_email" :
         /(press)/i.test(text) ? "press_email" :

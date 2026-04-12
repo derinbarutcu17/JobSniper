@@ -124,6 +124,9 @@ node ./scripts/run-sniper.mjs <subcommand>
 /sniper digest [limit]
 /sniper shortlist [limit]
 /sniper triage [limit]
+/sniper pipeline <job-id-or-url>
+/sniper assets <job-id>
+/sniper apply-state <job-id> --status <discovered|triaged|asset_ready|applied|contacted|reply_received|interviewing|rejected|archived> [--method <ats|direct_email|founder_reachout|linkedin|other>] [--note <text>]
 /sniper draft <job-id>
 /sniper explain <job-id>
 /sniper route <job-id>
@@ -201,7 +204,21 @@ Use:
 - `pitch` to see the wedge to lead with
 - `dossier` to get the company-level brief
 
-### 5. Log outreach and outcomes
+### 5. Run the application pipeline
+
+```text
+/sniper pipeline 42
+/sniper assets 42
+/sniper apply-state 42 --status applied --method ats --note submitted via careers page
+```
+
+Use:
+
+- `pipeline` to move a scored job into a concrete application-ready state
+- `assets` to regenerate CV/cover-letter/outreach assets for a specific job
+- `apply-state` to track lifecycle transitions after manual action
+
+### 6. Log outreach and outcomes
 
 ```text
 /sniper contact log north --channel email --job 42 --note intro sent
@@ -211,7 +228,7 @@ Use:
 
 This closes the loop so the system can surface which routes and themes are actually working.
 
-### 6. Sync to Google Sheets
+### 7. Sync to Google Sheets
 
 ```text
 /sniper sheet sync

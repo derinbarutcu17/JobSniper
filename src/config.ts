@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { SniperError } from "./errors.js";
 import { ensureDir } from "./lib/paths.js";
 import { builtInRolePacks } from "./role-packs.js";
 import type { LaneConfig, LaneId, SniperConfig } from "./types.js";
@@ -38,7 +39,7 @@ export const defaultConfig: SniperConfig = {
   blacklist: {
     companies: [],
     keywords: ["account executive", "sales", "gtm", "performance marketing", "chief of staff", "cto", "cfo"],
-    titleTerms: ["senior", "lead", "manager", "director", "head", "vp", "principal", "staff", "founder"],
+    titleTerms: ["senior", "lead", "manager", "director", "head", "vp", "principal", "staff", "founder", "co-founder", "cofounder"],
     softPenaltyTerms: ["stakeholder management", "people management", "budget ownership", "consulting"],
     lanes: Object.fromEntries(Object.keys(builtInRolePacks).map((lane) => [lane, []])),
   },
@@ -151,6 +152,90 @@ function sanitizeConfig(config: SniperConfig): SniperConfig {
   };
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function validateLaneConfig(laneId: string, lane: LaneConfig): void {
+  if (lane.type !== "job" && lane.type !== "company_watch") {
+    throw new SniperError(`Lane "${laneId}" has invalid type "${String(lane.type)}".`, "config_error");
+  }
+  if (typeof lane.enabled !== "boolean") {
+    throw new SniperError(`Lane "${laneId}" must set enabled to true or false.`, "config_error");
+  }
+  if (!isStringArray(lane.queries.en) || !isStringArray(lane.queries.tr)) {
+    throw new SniperError(`Lane "${laneId}" must define query arrays for en and tr.`, "config_error");
+  }
+  if (!isStringArray(lane.keywords)) {
+    throw new SniperError(`Lane "${laneId}" keywords must be a string array.`, "config_error");
+  }
+  if (!isStringArray(lane.queryTerms)) {
+    throw new SniperError(`Lane "${laneId}" queryTerms must be a string array.`, "config_error");
+  }
+  if (!isStringArray(lane.profileSignals)) {
+    throw new SniperError(`Lane "${laneId}" profileSignals must be a string array.`, "config_error");
+  }
+  if (!isStringArray(lane.mismatchTerms) || !isStringArray(lane.startupTerms) || !isStringArray(lane.companyTerms)) {
+    throw new SniperError(`Lane "${laneId}" contains malformed term lists.`, "config_error");
+  }
+  if (!Array.isArray(lane.titleFamilies)) {
+    throw new SniperError(`Lane "${laneId}" titleFamilies must be an array.`, "config_error");
+  }
+  if (
+    !lane.titleFamilies.every(
+      (entry) =>
+        entry &&
+        typeof entry.family === "string" &&
+        isStringArray(entry.terms),
+    )
+  ) {
+    throw new SniperError(`Lane "${laneId}" has an invalid title family definition.`, "config_error");
+  }
+  const hasQueries = lane.queries.en.length > 0 || lane.queries.tr.length > 0;
+  const hasTerms = lane.keywords.length > 0 || lane.queryTerms.length > 0;
+  if (lane.enabled && !hasQueries && !hasTerms) {
+    throw new SniperError(`Lane "${laneId}" is enabled but has no queries or keywords.`, "config_error");
+  }
+}
+
+function validateConfig(config: SniperConfig): SniperConfig {
+  if (Object.keys(config.lanes).length === 0) {
+    throw new SniperError("Config must define at least one lane.", "config_error");
+  }
+
+  for (const [laneId, lane] of Object.entries(config.lanes)) {
+    validateLaneConfig(laneId, lane);
+  }
+
+  if (!isStringArray(config.blacklist.companies) || !isStringArray(config.blacklist.keywords) || !isStringArray(config.blacklist.titleTerms) || !isStringArray(config.blacklist.softPenaltyTerms)) {
+    throw new SniperError("Blacklist fields must all be string arrays.", "config_error");
+  }
+
+  for (const [laneId, terms] of Object.entries(config.blacklist.lanes)) {
+    if (!(laneId in config.lanes)) {
+      throw new SniperError(`Blacklist lane "${laneId}" does not exist in config.lanes.`, "config_error");
+    }
+    if (!isStringArray(terms)) {
+      throw new SniperError(`Blacklist lane "${laneId}" must be a string array.`, "config_error");
+    }
+  }
+
+  if (!config.sheets.tabs.jobs || !config.sheets.tabs.companies || !config.sheets.tabs.contacts || !config.sheets.tabs.runMetrics) {
+    throw new SniperError("Sheets tabs must define jobs, companies, contacts, and runMetrics titles.", "config_error");
+  }
+
+  for (const board of config.sources.atsBoards) {
+    if (!board.lane || typeof board.lane !== "string") {
+      throw new SniperError(`ATS source "${board.name}" must define a lane.`, "config_error");
+    }
+    if (!(board.lane in config.lanes)) {
+      throw new SniperError(`ATS source "${board.name}" references unknown lane "${board.lane}".`, "config_error");
+    }
+  }
+
+  return config;
+}
+
 function migrateLegacyConfig(raw: Record<string, unknown>): ConfigOverrides {
   const search = (raw.search ?? {}) as Record<string, unknown>;
   const legacySources = Array.isArray(raw.sources) ? (raw.sources as Array<Record<string, unknown>>) : [];
@@ -217,18 +302,22 @@ function normalizeModernConfig(parsed: Record<string, unknown>): ConfigOverrides
 export function loadConfig(baseDir: string): SniperConfig {
   const configPath = path.join(baseDir, "config.json");
   if (!fs.existsSync(configPath)) {
-    return defaultConfig;
+    return validateConfig(defaultConfig);
   }
 
   const parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
   const looksModern =
-    typeof parsed.lanes === "object" &&
-    parsed.lanes !== null;
+    (typeof parsed.lanes === "object" && parsed.lanes !== null) ||
+    (typeof parsed.sources === "object" && parsed.sources !== null) ||
+    (typeof parsed.sheets === "object" && parsed.sheets !== null) ||
+    (typeof parsed.blacklist === "object" && parsed.blacklist !== null);
 
-  return sanitizeConfig(
-    looksModern
-      ? mergeConfig(defaultConfig, normalizeModernConfig(parsed))
-      : mergeConfig(defaultConfig, migrateLegacyConfig(parsed)),
+  return validateConfig(
+    sanitizeConfig(
+      looksModern
+        ? mergeConfig(defaultConfig, normalizeModernConfig(parsed))
+        : mergeConfig(defaultConfig, migrateLegacyConfig(parsed)),
+    ),
   );
 }
 

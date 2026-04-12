@@ -4,6 +4,9 @@ import { resolveDataPath } from "./lib/paths.js";
 import { uniqueNonEmpty } from "./lib/text.js";
 import { canonicalCompanyKey, canonicalContactKey, canonicalJobKey, domainFromUrl, domainTitleFingerprint } from "./lib/url.js";
 import type {
+  ApplicationMethod,
+  ApplicationRecord,
+  PipelineStatus,
   CompanyDecisionSnapshot,
   CompanyRecordInput,
   ConfidenceBand,
@@ -72,6 +75,11 @@ function preferNonEmpty(...values: Array<unknown>): string {
     }
   }
   return "";
+}
+
+function genericStageLabel(value: unknown): boolean {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return normalized === "" || normalized === "startup" || normalized === "berlin startup list" || normalized === "startup list" || normalized === "watchlist";
 }
 
 function hasColumn(db: Database.Database, table: string, column: string): boolean {
@@ -219,6 +227,14 @@ function createSchema(db: Database.Database): void {
       outreach_leverage_score REAL DEFAULT 0,
       interview_probability_band TEXT DEFAULT 'low',
       opportunity_cost_band TEXT DEFAULT 'medium',
+      pipeline_status TEXT DEFAULT 'discovered',
+      applied_at TEXT DEFAULT '',
+      application_method TEXT DEFAULT '',
+      application_url TEXT DEFAULT '',
+      asset_bundle_path TEXT DEFAULT '',
+      cv_asset_path TEXT DEFAULT '',
+      cover_letter_asset_path TEXT DEFAULT '',
+      outreach_note_asset_path TEXT DEFAULT '',
       FOREIGN KEY(company_id) REFERENCES companies(id)
     );
 
@@ -327,6 +343,32 @@ function createSchema(db: Database.Database): void {
       FOREIGN KEY(job_id) REFERENCES jobs(id)
     );
 
+    CREATE TABLE IF NOT EXISTS applications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER UNIQUE NOT NULL,
+      company_id INTEGER,
+      status TEXT DEFAULT 'triaged',
+      method TEXT DEFAULT 'other',
+      submitted_at TEXT DEFAULT '',
+      last_updated_at TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      source TEXT DEFAULT '',
+      asset_bundle_path TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(job_id) REFERENCES jobs(id),
+      FOREIGN KEY(company_id) REFERENCES companies(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS application_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      application_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      note TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(application_id) REFERENCES applications(id)
+    );
+
     CREATE TABLE IF NOT EXISTS sheet_sync_state (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       scope TEXT UNIQUE NOT NULL,
@@ -393,6 +435,14 @@ function patchExistingSchema(db: Database.Database): void {
     ["outreach_leverage_score", "REAL DEFAULT 0"],
     ["interview_probability_band", "TEXT DEFAULT 'low'"],
     ["opportunity_cost_band", "TEXT DEFAULT 'medium'"],
+    ["pipeline_status", "TEXT DEFAULT 'discovered'"],
+    ["applied_at", "TEXT DEFAULT ''"],
+    ["application_method", "TEXT DEFAULT ''"],
+    ["application_url", "TEXT DEFAULT ''"],
+    ["asset_bundle_path", "TEXT DEFAULT ''"],
+    ["cv_asset_path", "TEXT DEFAULT ''"],
+    ["cover_letter_asset_path", "TEXT DEFAULT ''"],
+    ["outreach_note_asset_path", "TEXT DEFAULT ''"],
   ] as const;
 
   const runMetricColumns = [
@@ -675,6 +725,20 @@ export function upsertCompany(db: Database.Database, input: CompanyRecordInput):
     input.directContactCount ?? uniqueNonEmpty(input.publicContacts).length,
   );
   const reachableNow = Boolean(Number(existing?.reachable_now ?? 0) || input.reachableNow || directContactCount > 0);
+  const mergedStageText =
+    input.stageText && !genericStageLabel(input.stageText)
+      ? input.stageText
+      : !genericStageLabel(existing?.stage_text)
+        ? String(existing?.stage_text ?? "")
+        : "";
+  const mergedStartupScore =
+    mergedStageText && input.startupScore > 0
+      ? input.startupScore
+      : genericStageLabel(existing?.stage_text) && !input.isStartupCandidate && input.startupScore > 0
+        ? input.startupScore
+      : Math.max(Number(existing?.startup_score ?? 0), input.startupScore);
+  const mergedStartupCandidate =
+    input.isStartupCandidate || (Boolean(Number(existing?.is_startup_candidate ?? 0)) && !genericStageLabel(existing?.stage_text));
 
   db.prepare(`
     INSERT INTO companies (
@@ -751,14 +815,14 @@ export function upsertCompany(db: Database.Database, input: CompanyRecordInput):
     founder_names: JSON.stringify(mergedFounderNames),
     cities: JSON.stringify(mergedCities),
     size_band: preferNonEmpty(input.sizeBand, existing?.size_band),
-    stage_text: preferNonEmpty(input.stageText, existing?.stage_text),
+    stage_text: mergedStageText,
     remote_policy: preferNonEmpty(input.remotePolicy, existing?.remote_policy),
     open_role_count: Math.max(Number(existing?.open_role_count ?? 0), input.openRoleCount),
-    startup_score: Math.max(Number(existing?.startup_score ?? 0), input.startupScore),
+    startup_score: mergedStartupScore,
     company_fit_score: Math.max(Number(existing?.company_fit_score ?? 0), input.companyFitScore),
     hiring_signal_score: Math.max(Number(existing?.hiring_signal_score ?? 0), input.hiringSignalScore),
     contactability_score: Math.max(Number(existing?.contactability_score ?? 0), input.contactabilityScore),
-    is_startup_candidate: Number(existing?.is_startup_candidate ?? 0) || input.isStartupCandidate ? 1 : 0,
+    is_startup_candidate: mergedStartupCandidate ? 1 : 0,
     recommendation: input.recommendation ?? preferNonEmpty(existing?.recommendation, "watch"),
     recommendation_reason: preferNonEmpty(input.recommendationReason ?? "", existing?.recommendation_reason),
     best_route: input.bestRoute ?? preferNonEmpty(existing?.best_route, "watch_company"),
@@ -1224,6 +1288,104 @@ export function listContacts(db: Database.Database, companyKey?: string): Array<
 
 export function getJobById(db: Database.Database, jobId: number): JobRecord | undefined {
   return db.prepare("SELECT * FROM jobs WHERE id = ?").get(jobId) as JobRecord | undefined;
+}
+
+export function getJobByUrl(db: Database.Database, url: string): JobRecord | undefined {
+  return db.prepare("SELECT * FROM jobs WHERE url = ? OR apply_url = ? ORDER BY updated_at DESC LIMIT 1").get(url, url) as JobRecord | undefined;
+}
+
+export function updateJobPipelineFields(
+  db: Database.Database,
+  jobId: number,
+  input: {
+    pipelineStatus?: PipelineStatus;
+    appliedAt?: string;
+    applicationMethod?: ApplicationMethod | "";
+    applicationUrl?: string;
+    assetBundlePath?: string;
+    cvAssetPath?: string;
+    coverLetterAssetPath?: string;
+    outreachNoteAssetPath?: string;
+  },
+): void {
+  db.prepare(`
+    UPDATE jobs
+    SET pipeline_status = COALESCE(@pipeline_status, pipeline_status),
+        applied_at = COALESCE(@applied_at, applied_at),
+        application_method = COALESCE(@application_method, application_method),
+        application_url = COALESCE(@application_url, application_url),
+        asset_bundle_path = COALESCE(@asset_bundle_path, asset_bundle_path),
+        cv_asset_path = COALESCE(@cv_asset_path, cv_asset_path),
+        cover_letter_asset_path = COALESCE(@cover_letter_asset_path, cover_letter_asset_path),
+        outreach_note_asset_path = COALESCE(@outreach_note_asset_path, outreach_note_asset_path),
+        updated_at = @updated_at
+    WHERE id = @id
+  `).run({
+    id: jobId,
+    pipeline_status: input.pipelineStatus ?? null,
+    applied_at: input.appliedAt ?? null,
+    application_method: input.applicationMethod ?? null,
+    application_url: input.applicationUrl ?? null,
+    asset_bundle_path: input.assetBundlePath ?? null,
+    cv_asset_path: input.cvAssetPath ?? null,
+    cover_letter_asset_path: input.coverLetterAssetPath ?? null,
+    outreach_note_asset_path: input.outreachNoteAssetPath ?? null,
+    updated_at: nowIso(),
+  });
+}
+
+export function upsertApplication(
+  db: Database.Database,
+  input: {
+    jobId: number;
+    companyId?: number | null;
+    status: PipelineStatus;
+    method: ApplicationMethod;
+    submittedAt?: string;
+    notes?: string;
+    source?: string;
+    assetBundlePath?: string;
+  },
+): ApplicationRecord {
+  const timestamp = nowIso();
+  db.prepare(`
+    INSERT INTO applications (
+      job_id, company_id, status, method, submitted_at, last_updated_at, notes, source, asset_bundle_path, created_at, updated_at
+    ) VALUES (
+      @job_id, @company_id, @status, @method, @submitted_at, @last_updated_at, @notes, @source, @asset_bundle_path, @created_at, @updated_at
+    )
+    ON CONFLICT(job_id) DO UPDATE SET
+      company_id = COALESCE(excluded.company_id, applications.company_id),
+      status = excluded.status,
+      method = excluded.method,
+      submitted_at = CASE WHEN excluded.submitted_at != '' THEN excluded.submitted_at ELSE applications.submitted_at END,
+      last_updated_at = excluded.last_updated_at,
+      notes = CASE WHEN excluded.notes != '' THEN excluded.notes ELSE applications.notes END,
+      source = CASE WHEN excluded.source != '' THEN excluded.source ELSE applications.source END,
+      asset_bundle_path = CASE WHEN excluded.asset_bundle_path != '' THEN excluded.asset_bundle_path ELSE applications.asset_bundle_path END,
+      updated_at = excluded.updated_at
+  `).run({
+    job_id: input.jobId,
+    company_id: input.companyId ?? null,
+    status: input.status,
+    method: input.method,
+    submitted_at: input.submittedAt ?? "",
+    last_updated_at: timestamp,
+    notes: input.notes ?? "",
+    source: input.source ?? "",
+    asset_bundle_path: input.assetBundlePath ?? "",
+    created_at: timestamp,
+    updated_at: timestamp,
+  });
+  return db.prepare("SELECT * FROM applications WHERE job_id = ?").get(input.jobId) as ApplicationRecord;
+}
+
+export function addApplicationEvent(
+  db: Database.Database,
+  input: { applicationId: number; eventType: string; note?: string },
+): void {
+  db.prepare("INSERT INTO application_events (application_id, event_type, note, created_at) VALUES (?, ?, ?, ?)")
+    .run(input.applicationId, input.eventType, input.note ?? "", nowIso());
 }
 
 export function getCompanyByRef(db: Database.Database, companyRef: string): Record<string, unknown> | undefined {

@@ -103,6 +103,28 @@ describe("scoring", () => {
     expect(scored.breakdown.gatesFailed).not.toContain("title_seniority");
   });
 
+  it("honors config blacklist title terms for hard title gating", () => {
+    const baseDir = makeTempDir();
+    fs.writeFileSync(
+      path.join(baseDir, "config.json"),
+      JSON.stringify(
+        {
+          blacklist: {
+            titleTerms: ["staff"],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const config = loadConfig(baseDir);
+    const scored = scoreListing(config, profile, listing({ title: "Staff Product Designer" }));
+    expect(scored.category).toBe("Excluded");
+    expect(scored.breakdown.gatesFailed).toContain("title_seniority");
+    expect(scored.rationale.toLowerCase()).toContain("staff");
+  });
+
   it("excludes closed roles from explicit closure text", () => {
     const config = loadConfig(makeTempDir());
     const scored = scoreListing(

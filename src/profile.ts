@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import * as cheerio from "cheerio";
 import pdf from "pdf-parse";
 import { defaultConfig, loadConfig } from "./config.js";
 import { resolveProfilePath } from "./lib/paths.js";
@@ -33,6 +34,32 @@ function looksLikeFilePath(input: string): boolean {
   );
 }
 
+function looksLikeUrl(input: string): boolean {
+  return /^https?:\/\//i.test(input.trim());
+}
+
+async function readUrlContent(input: string): Promise<string> {
+  const response = await fetch(input, {
+    headers: {
+      "user-agent": "job-sniper/1.0 (+portfolio onboarding)",
+      accept: "text/html,application/json,text/plain;q=0.9,*/*;q=0.8",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Profile URL fetch failed with ${response.status}: ${input}`);
+  }
+  const body = await response.text();
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!/html/i.test(contentType)) {
+    return body.trim();
+  }
+  const $ = cheerio.load(body);
+  const title = $("title").text().trim();
+  const metaDescription = $('meta[name="description"]').attr("content")?.trim() ?? "";
+  const bodyText = $("body").text().replace(/\s+/g, " ").trim();
+  return [title, metaDescription, bodyText].filter(Boolean).join("\n").trim();
+}
+
 async function readProfileInput(input: string): Promise<string> {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -47,6 +74,10 @@ async function readProfileInput(input: string): Promise<string> {
       return parsed.text.trim();
     }
     return fs.readFileSync(trimmed, "utf8").trim();
+  }
+
+  if (looksLikeUrl(trimmed)) {
+    return readUrlContent(trimmed);
   }
 
   if (looksLikeFilePath(trimmed)) {

@@ -46,6 +46,7 @@ export function mapJobRecordToSummary(job: JobRecord): JobSummary {
     workModel: job.work_model,
     postedAt: job.posted_at,
     url: job.url,
+    pipelineStatus: job.pipeline_status || "discovered",
   };
 }
 
@@ -72,6 +73,13 @@ export function mapJobRecordToDetail(job: JobRecord): JobDetail {
     }),
     publicContacts: parseJsonArray(job.public_contacts, []),
     sourceUrls: parseJsonArray(job.source_urls, []),
+    appliedAt: job.applied_at || "",
+    applicationMethod: job.application_method || "",
+    applicationUrl: job.application_url || "",
+    assetBundlePath: job.asset_bundle_path || "",
+    cvAssetPath: job.cv_asset_path || "",
+    coverLetterAssetPath: job.cover_letter_asset_path || "",
+    outreachNoteAssetPath: job.outreach_note_asset_path || "",
   };
 }
 

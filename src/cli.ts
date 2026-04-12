@@ -17,11 +17,14 @@ function help(): string {
     "  shortlist [limit]",
     "  triage [limit]",
     "  draft <job-id>",
+    "  pipeline <job-id-or-url>",
+    "  assets <job-id>",
+    "  apply-state <job-id> --status <discovered|triaged|asset_ready|applied|contacted|reply_received|interviewing|rejected|archived> [--method <ats|direct_email|founder_reachout|linkedin|other>] [--note <text>]",
     "  explain <job-id>",
     "  route <job-id>",
     "  pitch <job-id>",
     "  blacklist add [--company | --keyword] [--lane <lane>] <term>",
-    "  sheet sync",
+    "  sheet sync [--companies-only]",
     "  sheet pull",
     "  companies [limit]",
     "  dossier <company-id-or-key>",
@@ -93,6 +96,59 @@ export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<st
     return app.draft(jobId);
   }
 
+  if (command === "pipeline") {
+    const input = rest.join(" ").trim();
+    if (!input) {
+      throw new Error("pipeline requires a job id or job URL.");
+    }
+    return app.pipeline(input);
+  }
+
+  if (command === "assets") {
+    const jobId = Number(rest[0]);
+    if (!Number.isFinite(jobId)) {
+      throw new Error("assets requires a numeric job ID.");
+    }
+    return app.assets(jobId);
+  }
+
+  if (command === "apply-state") {
+    const jobId = Number(rest[0]);
+    if (!Number.isFinite(jobId)) {
+      throw new Error("apply-state requires a numeric job ID.");
+    }
+    let status:
+      | "discovered"
+      | "triaged"
+      | "asset_ready"
+      | "applied"
+      | "contacted"
+      | "reply_received"
+      | "interviewing"
+      | "rejected"
+      | "archived"
+      | undefined;
+    let method: "ats" | "direct_email" | "founder_reachout" | "linkedin" | "other" | undefined;
+    let note = "";
+    for (let index = 1; index < rest.length; index += 1) {
+      const token = rest[index];
+      if (token === "--status") {
+        status = rest[index + 1] as typeof status;
+        index += 1;
+      } else if (token === "--method") {
+        method = rest[index + 1] as typeof method;
+        index += 1;
+      } else if (token === "--note") {
+        note = rest.slice(index + 1).join(" ");
+        break;
+      }
+    }
+    if (!status) {
+      throw new Error("apply-state requires --status.");
+    }
+    return app.applyState({ jobId, status, method, note });
+  }
+
   if (command === "explain") {
     const jobId = Number(rest[0]);
     if (!Number.isFinite(jobId)) {
@@ -142,7 +198,8 @@ export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<st
   }
 
   if (command === "sheet" && rest[0] === "sync") {
-    return app.sheetSync();
+    const companiesOnly = rest.includes("--companies-only");
+    return app.sheetSync(companiesOnly ? "companies_only" : "all");
   }
 
   if (command === "sheet" && rest[0] === "pull") {

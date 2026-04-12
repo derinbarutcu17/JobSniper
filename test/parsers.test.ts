@@ -81,17 +81,24 @@ describe("parsers", () => {
       `
         <html><body>
           <a href="mailto:jobs@example.com">Apply via email</a>
-          <a href="mailto:press@example.com">Press</a>
-          <p>Reach recruiter@example.com for hiring.</p>
+          <a href="mailto:jobs@company.org?subject=Apply">Apply via email</a>
+          <a href="mailto:press@company.org">Press</a>
+          <a href="mailto:name@company.com">Placeholder</a>
+          <a href="mailto:do-not-reply@company.org">Ignore</a>
+          <p>Reach recruiter@company.org for hiring.</p>
+          <p>Asset playlist-cover-bg_small@2x-c437aa7f.png should not be treated like an email.</p>
         </body></html>
       `,
       "test",
       "page",
     );
     const contacts = extractContacts(page);
-    expect(contacts.some((contact) => contact.email === "jobs@example.com")).toBe(true);
-    expect(contacts.some((contact) => contact.email === "press@example.com")).toBe(true);
-    expect(contacts.some((contact) => contact.email === "recruiter@example.com")).toBe(true);
+    expect(contacts.some((contact) => contact.email === "jobs@company.org")).toBe(true);
+    expect(contacts.some((contact) => contact.email === "press@company.org")).toBe(true);
+    expect(contacts.some((contact) => contact.email === "recruiter@company.org")).toBe(true);
+    expect(contacts.some((contact) => contact.email === "name@company.com")).toBe(false);
+    expect(contacts.some((contact) => contact.email === "do-not-reply@company.org")).toBe(false);
+    expect(contacts.some((contact) => contact.email?.includes("?subject"))).toBe(false);
     expect(
       contacts.some(
         (contact) => Boolean(contact.email) && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(contact.email),

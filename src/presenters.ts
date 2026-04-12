@@ -1,4 +1,4 @@
-import type { CompanyDossierView, CompanySummary, ContactSummary, JobDetail, JobSummary, RunResult, StatsSnapshot, TriageItem } from "./types.js";
+import type { CompanyDossierView, CompanySummary, ContactSummary, JobDetail, JobSummary, PipelineResult, RunResult, StatsSnapshot, TriageItem } from "./types.js";
 
 export function presentRunResult(result: RunResult): string {
   const warningLine = result.summary.warnings?.length ? `Warnings: ${result.summary.warnings.join(" | ")}` : "";
@@ -98,5 +98,17 @@ export function presentStats(snapshot: StatsSnapshot): string {
     snapshot.latestRun
       ? `Last run: #${snapshot.latestRun.id} ${snapshot.latestRun.status}`
       : "Last run: none",
+  ].join("\n");
+}
+
+export function presentPipelineResult(result: PipelineResult): string {
+  const assetLine = result.assets
+    ? `Assets: ${result.assets.cvPath} | ${result.assets.coverLetterPath} | ${result.assets.outreachNotePath}`
+    : "Assets: none generated for this status.";
+  return [
+    `Pipeline updated job [${result.job.id}] ${result.job.title} @ ${result.job.companyName}`,
+    `Status: ${result.updatedStatus}`,
+    `Recommendation: ${result.job.recommendation} | Route: ${result.job.recommendedRoute}`,
+    assetLine,
   ].join("\n");
 }

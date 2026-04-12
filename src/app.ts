@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadConfig, saveConfig } from "./config.js";
+import { enrichCompanyFromWeb } from "./company-enrich.js";
 import { logContactAttempt, logOutcome } from "./contact-log.js";
 import {
   enqueueDiscoveryCandidates,
+  getCompanyByRef,
   listCompanies,
   listContacts,
   openDatabase,
@@ -20,10 +22,11 @@ import { buildPageRecord, extractContacts } from "./search/extract.js";
 import { getSearchProviders } from "./search/web.js";
 import { pullSheets, syncSheets, type SheetGateway } from "./sheets.js";
 import type { Dependencies, SearchLane } from "./types.js";
-import { presentCompanies, presentContacts, presentDossier, presentJobDetail, presentJobList, presentRunResult, presentStats, presentTriage } from "./presenters.js";
+import { presentCompanies, presentContacts, presentDossier, presentJobDetail, presentJobList, presentPipelineResult, presentRunResult, presentStats, presentTriage } from "./presenters.js";
 import { createCompaniesService } from "./services/companies-service.js";
 import { createContactsService } from "./services/contacts-service.js";
 import { createJobsService } from "./services/jobs-service.js";
+import { createPipelineService } from "./services/pipeline-service.js";
 import { createProfileService } from "./services/profile-service.js";
 import { createRunService } from "./services/run-service.js";
 import { createSheetSyncService } from "./services/sheet-sync-service.js";
@@ -44,112 +47,18 @@ function parseCompanyRef(input: string): { id?: number; key?: string } {
 
 async function enrichCompanyRecord(baseDir: string, deps: Dependencies, companyRef: string): Promise<string> {
   const { db } = openDatabase(baseDir);
-  const ref = parseCompanyRef(companyRef);
-  const company = ref.id
-    ? (db.prepare("SELECT * FROM companies WHERE id = ?").get(ref.id) as Record<string, unknown> | undefined)
-    : (db.prepare("SELECT * FROM companies WHERE canonical_key = ? OR lower(name) = lower(?)").get(ref.key, ref.key) as
-        | Record<string, unknown>
-        | undefined);
+  const company = getCompanyByRef(db, companyRef);
   if (!company) {
     throw new Error(`Company not found: ${companyRef}`);
   }
 
-  const baseUrl =
-    String(company.company_url ?? "") ||
-    (String(company.domain ?? "") ? `https://${String(company.domain)}` : "");
-  if (!baseUrl) {
-    throw new Error(`Company ${String(company.name ?? companyRef)} has no known domain.`);
+  const result = await enrichCompanyFromWeb(company, deps);
+  upsertCompany(db, result.companyInput);
+  for (const contact of result.contacts) {
+    upsertContact(db, contact);
   }
 
-  const allowlist = [
-    baseUrl,
-    new URL("/about", baseUrl).toString(),
-    new URL("/team", baseUrl).toString(),
-    new URL("/careers", baseUrl).toString(),
-    new URL("/jobs", baseUrl).toString(),
-    new URL("/contact", baseUrl).toString(),
-    new URL("/imprint", baseUrl).toString(),
-    new URL("/press", baseUrl).toString(),
-  ];
-
-  let touchedContacts = 0;
-  let touchedPages = 0;
-  const companyKey = String(company.canonical_key);
-  const publicContacts = new Set<string>();
-
-  for (const url of allowlist) {
-    try {
-      const response = await deps.fetch(url);
-      if (!response.ok) continue;
-      const html = await response.text();
-      const page = buildPageRecord(url, html, "manual_enrich", "page");
-      const contacts = extractContacts(page);
-      touchedPages += 1;
-      for (const contact of contacts) {
-        publicContacts.add(contact.email || contact.linkedinUrl || contact.sourceUrl);
-        upsertContact(db, {
-          canonicalKey: canonicalContactKey(contact.email, contact.linkedinUrl, contact.name || url, companyKey),
-          companyCanonicalKey: companyKey,
-          name: contact.name,
-          title: contact.title,
-          email: contact.email,
-          sourceUrl: contact.sourceUrl,
-          linkedinUrl: contact.linkedinUrl,
-          contactKind: contact.kind,
-          notes: contact.kind,
-          confidence: contact.confidence,
-          evidenceType: contact.evidenceType,
-          evidenceExcerpt: contact.evidenceExcerpt,
-          isPublic: contact.isPublic,
-          lastVerifiedAt: new Date().toISOString(),
-          pageType: contact.pageType,
-          lastSeenAt: new Date().toISOString(),
-        });
-        touchedContacts += 1;
-      }
-      upsertCompany(db, {
-        canonicalKey: companyKey,
-        name: String(company.name ?? ""),
-        domain: String(company.domain ?? domainFromUrl(baseUrl)),
-        location: /berlin/i.test(page.text)
-          ? "Berlin"
-          : /germany|deutschland/i.test(page.text)
-            ? "Germany"
-            : String(company.location ?? ""),
-        companyUrl: baseUrl,
-        careersUrl: /careers|jobs/i.test(url) ? url : String(company.careers_url ?? ""),
-        aboutUrl: /about/i.test(url) ? url : String(company.about_url ?? ""),
-        teamUrl: /team/i.test(url) ? url : String(company.team_url ?? ""),
-        contactUrl: /contact|imprint/i.test(url) ? url : String(company.contact_url ?? ""),
-        pressUrl: /press/i.test(url) ? url : String(company.press_url ?? ""),
-        linkedinUrl:
-          contacts.find((contact) => contact.kind === "linkedin_company")?.linkedinUrl ||
-          String(company.linkedin_url ?? ""),
-        description: page.text.slice(0, 1200),
-        sourceUrls: [baseUrl, ...allowlist],
-        publicContacts: [...publicContacts],
-        startupSignals: /seed|series a|founding|small team/i.test(page.text) ? ["startup_language"] : [],
-        hiringSignals: /hiring|careers|open roles|jobs/i.test(page.text) ? ["hiring_language"] : [],
-        founderNames: [],
-        cities: /berlin/i.test(page.text) ? ["Berlin"] : [],
-        sizeBand: String(company.size_band ?? ""),
-        stageText: /seed|series a|founding/i.test(page.text) ? "startup signal" : String(company.stage_text ?? ""),
-        remotePolicy: /remote|uzaktan|hybrid/i.test(page.text) ? "remote-friendly" : String(company.remote_policy ?? ""),
-        openRoleCount: Number(company.open_role_count ?? 0),
-        startupScore: /seed|series a|founding|small team/i.test(page.text) ? 12 : Number(company.startup_score ?? 0),
-        companyFitScore: Number(company.company_fit_score ?? 0),
-        hiringSignalScore: /hiring|careers|jobs/i.test(page.text) ? 8 : Number(company.hiring_signal_score ?? 0),
-        contactabilityScore: publicContacts.size ? 10 : Number(company.contactability_score ?? 0),
-        isStartupCandidate:
-          /seed|series a|founding|small team/i.test(page.text) || Boolean(Number(company.is_startup_candidate ?? 0)),
-        lastSeenAt: new Date().toISOString(),
-      });
-    } catch {
-      // Best-effort enrichment.
-    }
-  }
-
-  return `Enriched ${String(company.name ?? companyRef)}. Pages checked: ${touchedPages}, contacts refreshed: ${touchedContacts}.`;
+  return `Enriched ${String(company.name ?? companyRef)}. Pages checked: ${result.pagesChecked}, contacts refreshed: ${result.contacts.length}.`;
 }
 
 export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
@@ -158,6 +67,7 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
   const profileService = createProfileService(baseDir);
   const runService = createRunService(baseDir, deps);
   const jobsService = createJobsService(baseDir);
+  const pipelineService = createPipelineService(baseDir);
   const companiesService = createCompaniesService(baseDir);
   const contactsService = createContactsService(baseDir);
   const sheetSyncService = createSheetSyncService(baseDir, sheetGateway);
@@ -207,6 +117,18 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       const job = jobsService.getJob(jobId);
       if (!job) throw new SniperError(`Job ${jobId} was not found.`, "not_found");
       return presentJobDetail(job, "pitch");
+    },
+
+    pipeline(input: string) {
+      return presentPipelineResult(pipelineService.pipeline(input));
+    },
+
+    assets(jobId: number) {
+      return presentPipelineResult(pipelineService.assets(jobId));
+    },
+
+    applyState(input: { jobId: number; status: "discovered" | "triaged" | "asset_ready" | "applied" | "contacted" | "reply_received" | "interviewing" | "rejected" | "archived"; method?: "ats" | "direct_email" | "founder_reachout" | "linkedin" | "other"; note?: string }) {
+      return presentPipelineResult(pipelineService.updateApplyState(input));
     },
 
     blacklistAdd(input: { term: string; mode: "company" | "keyword"; lane?: SearchLane }) {
@@ -331,9 +253,13 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       return `Exported JSON to ${resolvedPath}`;
     },
 
-    async sheetSync() {
-      const result = await sheetSyncService.sync(statsService.get().latestRun?.id ?? null);
-      return `Sheets sync complete. ${result.jobs} job rows synced.\n${result.url}`;
+    async sheetSync(scope: "all" | "companies_only" = "all") {
+      const result = await sheetSyncService.sync(statsService.get().latestRun?.id ?? null, scope);
+      const summary =
+        scope === "companies_only"
+          ? "Sheets sync complete. Companies and contacts refreshed."
+          : `Sheets sync complete. ${result.jobs} job rows synced.`;
+      return `${summary}\n${result.url}`;
     },
 
     async sheetPull() {
