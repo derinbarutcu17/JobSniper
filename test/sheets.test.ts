@@ -167,6 +167,8 @@ describe("sheets sync", () => {
     expect(second.spreadsheetId).toBe("sheet-123");
     expect(gateway.headers.get("Jobs")).toContain("canonical_key");
     expect(gateway.headers.get("Jobs")).toContain("manual_status");
+    expect(gateway.headers.get("Jobs")).toContain("pipeline_status");
+    expect(gateway.headers.get("Jobs")).toContain("company_outreach_status");
     expect(gateway.headers.get("Jobs")).toContain("recommendation");
     expect(gateway.headers.get("Jobs")).toContain("recommended_route");
     expect(gateway.headers.get("Jobs")).toContain("recommendation_reason");
@@ -174,6 +176,8 @@ describe("sheets sync", () => {
     expect(gateway.headers.get("Jobs")).toContain("strongest_profile_signal");
     expect(gateway.headers.get("Jobs")).toContain("apply_url");
     expect(gateway.headers.get("Companies")).toContain("best_route");
+    expect(gateway.headers.get("Companies")).toContain("outreach_status");
+    expect(gateway.headers.get("Companies")).toContain("last_contact_channel");
     expect(gateway.headers.get("Companies")).toContain("recommendation_reason");
     expect(gateway.headers.get("Companies")).toContain("pitch_evidence");
     expect(gateway.headers.get("Companies")).toContain("startup_signals");

@@ -9,6 +9,7 @@ This is for:
 - daily discovery
 - daily triage
 - Google Sheets sync
+- explicit DB-backed outreach state updates
 - repeatable local-first operation
 
 This is not for:
@@ -242,12 +243,19 @@ Priority order:
 4. update strategic recommendations
 5. sync the latest state
 
+Most important operating rule:
+
+- do not track sent/reached/applied truth in local markdown lists
+- update outreach and application state in Job Sniper itself
+- then publish that exact DB-backed state to Sheets and the live dashboard
+
 Hermes should prefer:
 
 - `triage` over `digest` for daily review
 - `dossier` when a company looks more valuable than a single job post
 - `route` and `pitch` when preparing outreach
 - `experiments` when checking what is working over time
+- `company-state` when a company-level outreach action happened without a clean job application event
 
 ## Recommended Hermes playbook
 

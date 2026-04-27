@@ -1,10 +1,12 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { loadConfig } from "../src/config.ts";
-import { getStoredSpreadsheetId, openDatabase } from "../src/db.ts";
-import { resolveCompanyBestContact } from "../src/company-enrich.ts";
-import { isEmail, isPlaceholderEmail, isWeakOutreachEmail, scoreContactCandidate } from "../src/normalization/contact-quality.ts";
+import { fileURLToPath } from "node:url";
+import { loadConfig } from "../src/config.js";
+import { getStoredSpreadsheetId, openDatabase } from "../src/db.js";
+import { buildCompanyOutreachSnapshots } from "../src/outreach-state.js";
+import { resolveCompanyBestContact } from "../src/company-enrich.js";
+import { isEmail, isPlaceholderEmail, isWeakOutreachEmail, scoreContactCandidate } from "../src/normalization/contact-quality.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -34,6 +36,10 @@ type DashboardCompany = {
   hiringSignals: string[];
   recommendationReason: string;
   pitchAngle: string;
+  outreachStatus: string;
+  lastContactChannel: string;
+  latestActivityAt: string;
+  latestStatusNote: string;
   updatedAt: string;
 };
 
@@ -67,7 +73,7 @@ type OutreachItem = {
 };
 
 type PipelineItem = {
-  stage: "talking" | "rejected" | "applied" | "contacted";
+  stage: "talking" | "rejected" | "applied" | "sent_email" | "reached";
   companyName: string;
   jobTitle: string;
   detail: string;
@@ -256,18 +262,6 @@ function companyBestContact(company: JsonRecord, companyContacts: JsonRecord[]):
   return stripTracking(best);
 }
 
-function derivePipelineStage(job: JsonRecord, app: JsonRecord | undefined, outcome: JsonRecord | undefined, contact: JsonRecord | undefined): PipelineItem["stage"] | null {
-  const jobStage = safeString(job.pipeline_status);
-  const outcomeResult = safeString(outcome?.result);
-  if (outcomeResult === "rejected" || jobStage === "rejected") return "rejected";
-  if (["reply", "call", "interview", "positive_signal"].includes(outcomeResult) || ["reply_received", "interviewing"].includes(jobStage)) {
-    return "talking";
-  }
-  if (safeString(app?.status) === "applied" || jobStage === "applied") return "applied";
-  if (contact || jobStage === "contacted") return "contacted";
-  return null;
-}
-
 function ensureDir(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true });
 }
@@ -282,8 +276,7 @@ function outreachDedupKey(item: OutreachItem): string {
   ].join("::");
 }
 
-function main() {
-  const baseDir = path.resolve(process.cwd());
+export function generateDashboardData(baseDir = path.resolve(process.cwd())) {
   const { db } = openDatabase(baseDir);
   const config = loadConfig(baseDir);
   const generatedAt = new Date().toISOString();
@@ -317,26 +310,13 @@ function main() {
     contactsByCompanyId.set(companyId, existing);
   }
 
-  const appsByJobId = new Map<number, JsonRecord>();
-  for (const app of applications) {
-    const jobId = safeNumber(app.job_id);
-    if (jobId) appsByJobId.set(jobId, app);
-  }
-
-  const latestContactByJobId = new Map<number, JsonRecord>();
-  const latestOutcomeByJobId = new Map<number, JsonRecord>();
-  for (const log of contactLogs) {
-    const jobId = safeNumber(log.job_id);
-    if (jobId && !latestContactByJobId.has(jobId)) latestContactByJobId.set(jobId, log);
-  }
-  for (const log of outcomeLogs) {
-    const jobId = safeNumber(log.job_id);
-    if (jobId && !latestOutcomeByJobId.has(jobId)) latestOutcomeByJobId.set(jobId, log);
-  }
+  const companyOutreach = buildCompanyOutreachSnapshots(db);
+  const companyOutreachById = new Map(companyOutreach.map((snapshot) => [snapshot.companyId, snapshot]));
 
   const companyViews: DashboardCompany[] = companies.map((company) => {
     const companyId = safeNumber(company.id);
     const companyContacts = contactsByCompanyId.get(companyId) ?? [];
+    const outreach = companyOutreachById.get(companyId);
     return {
       id: companyId,
       name: safeString(company.name),
@@ -357,6 +337,10 @@ function main() {
       hiringSignals: parseJsonList(company.hiring_signals),
       recommendationReason: safeString(company.recommendation_reason),
       pitchAngle: safeString(company.pitch_angle),
+      outreachStatus: outreach?.status ?? "new",
+      lastContactChannel: outreach?.lastContactChannel ?? "",
+      latestActivityAt: outreach?.latestActivityAt ?? "",
+      latestStatusNote: outreach?.latestNote ?? "",
       updatedAt: safeString(company.updated_at),
     };
   });
@@ -384,15 +368,17 @@ function main() {
   const activeJobs = jobViews.filter((job) => !["discard"].includes(job.category) && !["applied", "rejected", "archived"].includes(job.pipelineStatus));
 
   const outreach = [
-    ...contactLogs.map((log) => ({
+    ...companyOutreach
+      .filter((snapshot) => snapshot.status === "sent_email")
+      .map((snapshot) => ({
       type: "email" as const,
-      companyName: safeString(log.company_name),
-      jobTitle: safeString(log.job_title),
-      route: safeString(log.channel),
+      companyName: snapshot.companyName,
+      jobTitle: jobs.find((job) => safeNumber(job.id) === (snapshot.lastJobId ?? 0)) ? safeString(jobs.find((job) => safeNumber(job.id) === (snapshot.lastJobId ?? 0))?.title) : "",
+      route: snapshot.lastContactChannel || "email",
       status: "sent",
-      target: companyBestContactByName.get(safeString(log.company_name)) ?? "",
-      note: safeString(log.note),
-      timestamp: safeString(log.created_at),
+      target: companyBestContactByName.get(snapshot.companyName) ?? "",
+      note: snapshot.latestNote,
+      timestamp: snapshot.latestActivityAt,
     })),
     ...applications.map((app) => {
       const job = jobs.find((row) => safeNumber(row.id) === safeNumber(app.job_id));
@@ -420,34 +406,41 @@ function main() {
 
   const pipeline: PipelineItem[] = jobs
     .map((job) => {
-      const jobId = safeNumber(job.id);
-      const app = appsByJobId.get(jobId);
-      const contact = latestContactByJobId.get(jobId);
-      const outcome = latestOutcomeByJobId.get(jobId);
-      const stage = derivePipelineStage(job, app, outcome, contact);
-      if (!stage) return null;
+      const companySnapshot = companyOutreachById.get(safeNumber(job.company_id));
+      const stage = companySnapshot?.status;
+      if (!stage || !["talking", "rejected", "applied", "sent_email", "reached"].includes(stage)) return null;
       return {
-        stage,
+        stage: stage as PipelineItem["stage"],
         companyName: safeString(job.company_name),
         jobTitle: safeString(job.title),
-        detail: safeString(outcome?.note || app?.notes || contact?.note || job.recommendation_reason),
+        detail: companySnapshot?.latestNote || safeString(job.recommendation_reason),
         target: safeString(job.apply_url || job.url),
-        timestamp: safeString(outcome?.created_at || app?.submitted_at || contact?.created_at || job.updated_at),
+        timestamp: companySnapshot?.latestActivityAt || safeString(job.updated_at),
       } satisfies PipelineItem;
     })
     .filter((item): item is PipelineItem => Boolean(item))
     .sort((left, right) => right.timestamp.localeCompare(left.timestamp));
 
+  const companyStatusSummary = {
+    reached: companyOutreach.filter((item) => item.status === "reached").length,
+    sentEmail: companyOutreach.filter((item) => item.status === "sent_email").length,
+    applied: companyOutreach.filter((item) => item.status === "applied").length,
+    talking: companyOutreach.filter((item) => item.status === "talking").length,
+    rejected: companyOutreach.filter((item) => item.status === "rejected").length,
+    archived: companyOutreach.filter((item) => item.status === "archived").length,
+  };
+
   const summary = {
     companies: companyViews.length,
     directContacts: companyViews.filter((company) => company.directContactCount > 0 || company.bestContact.includes("@")).length,
     activeJobs: activeJobs.length,
-    sentEmails: outreach.filter((item) => item.type === "email").length,
-    applications: outreach.filter((item) => item.type === "application").length,
-    talking: pipeline.filter((item) => item.stage === "talking").length,
-    rejected: pipeline.filter((item) => item.stage === "rejected").length,
-    applied: pipeline.filter((item) => item.stage === "applied").length,
-    contacted: pipeline.filter((item) => item.stage === "contacted").length,
+    reached: companyStatusSummary.reached,
+    sentEmails: companyStatusSummary.sentEmail,
+    applications: companyStatusSummary.applied,
+    talking: companyStatusSummary.talking,
+    rejected: companyStatusSummary.rejected,
+    applied: companyStatusSummary.applied,
+    contacted: companyStatusSummary.sentEmail,
   };
 
   const payload = {
@@ -462,11 +455,37 @@ function main() {
     activeJobs,
     outreach,
     pipeline,
+    companyOutreach,
   };
 
   const outputDir = path.join(baseDir, "dashboard", "data");
   ensureDir(outputDir);
   fs.writeFileSync(path.join(outputDir, "dashboard.json"), `${JSON.stringify(payload, null, 2)}\n`);
+  fs.writeFileSync(path.join(outputDir, "outreach-status.json"), `${JSON.stringify(companyOutreach, null, 2)}\n`);
+  fs.writeFileSync(
+    path.join(outputDir, "outreach-status.md"),
+    [
+      "# Outreach Status",
+      "",
+      `Generated: ${generatedAt}`,
+      "",
+      "## Sent Email",
+      ...companyOutreach.filter((item) => item.status === "sent_email").map((item) => `- ${item.companyName} | ${item.lastContactChannel || "email"} | ${item.latestActivityAt}`),
+      "",
+      "## Applied",
+      ...companyOutreach.filter((item) => item.status === "applied").map((item) => `- ${item.companyName} | ${item.latestActivityAt}`),
+      "",
+      "## Talking",
+      ...companyOutreach.filter((item) => item.status === "talking").map((item) => `- ${item.companyName} | ${item.latestActivityAt}`),
+      "",
+      "## Rejected",
+      ...companyOutreach.filter((item) => item.status === "rejected").map((item) => `- ${item.companyName} | ${item.latestActivityAt}`),
+      "",
+      "## Reached",
+      ...companyOutreach.filter((item) => item.status === "reached").map((item) => `- ${item.companyName} | ${item.latestActivityAt}`),
+      "",
+    ].join("\n"),
+  );
   fs.writeFileSync(
     path.join(outputDir, "sync-state.json"),
     `${JSON.stringify(
@@ -482,6 +501,9 @@ function main() {
   );
 
   console.log(JSON.stringify({ outputDir, generatedAt, summary }, null, 2));
+  return payload;
 }
 
-main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  generateDashboardData();
+}

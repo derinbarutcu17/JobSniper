@@ -31,6 +31,7 @@ import { createProfileService } from "../state/services/profile-service.js";
 import { createRunService } from "../state/services/run-service.js";
 import { createSheetSyncService } from "../state/services/sheet-sync-service.js";
 import { createStatsService } from "../state/services/stats-service.js";
+import { createOutreachStatusService } from "../state/services/outreach-status-service.js";
 
 export interface AppDependencies {
   deps?: Dependencies;
@@ -72,6 +73,7 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
   const contactsService = createContactsService(baseDir);
   const sheetSyncService = createSheetSyncService(baseDir, sheetGateway);
   const statsService = createStatsService(baseDir);
+  const outreachStatusService = createOutreachStatusService(baseDir);
 
   return {
     async onboard(input: string) {
@@ -183,6 +185,11 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       return `Logged outcome for ${input.companyRef}: ${entry.result}.`;
     },
 
+    companyState(input: { companyRef: string; status: "reached" | "sent_email" | "talking" | "rejected" | "archived"; channel?: "email" | "linkedin" | "ats" | "founder"; note?: string; jobId?: number }) {
+      const snapshot = outreachStatusService.setCompanyState(input);
+      return `Updated ${snapshot.companyName}: ${snapshot.status}${snapshot.lastContactChannel ? ` via ${snapshot.lastContactChannel}` : ""}.`;
+    },
+
     experiments() {
       const { db } = openDatabase(baseDir);
       const summary = summarizeExperiments(db);
@@ -248,6 +255,7 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
         runMetrics: db.prepare("SELECT * FROM run_metrics ORDER BY id DESC LIMIT 25").all(),
         contactLog: db.prepare("SELECT * FROM contact_log ORDER BY created_at DESC LIMIT 100").all(),
         outcomeLog: db.prepare("SELECT * FROM outcome_log ORDER BY created_at DESC LIMIT 100").all(),
+        companyOutreachState: db.prepare("SELECT * FROM company_outreach_state ORDER BY updated_at DESC").all(),
       };
       const resolvedPath = outputPath || path.join(baseDir, "data", "sniper-export.json");
       fs.writeFileSync(resolvedPath, `${JSON.stringify(payload, null, 2)}\n`);

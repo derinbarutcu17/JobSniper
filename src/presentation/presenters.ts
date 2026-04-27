@@ -59,7 +59,7 @@ export function presentJobDetail(job: JobDetail, mode: "explain" | "route" | "pi
 export function presentCompanies(companies: CompanySummary[]): string {
   if (!companies.length) return "No companies tracked yet. Run `run` first.";
   return companies.map((company, index) =>
-    `${index + 1}. ${company.name} | ${company.recommendation} | route ${company.bestRoute} | startup ${Math.round(company.startupScore)} | fit ${Math.round(company.companyFitScore)} | ${company.location || "Unknown"} | ${company.careersUrl || ""}`,
+    `${index + 1}. ${company.name} | ${company.recommendation} | outreach ${company.outreachStatus} | route ${company.bestRoute} | startup ${Math.round(company.startupScore)} | fit ${Math.round(company.companyFitScore)} | ${company.location || "Unknown"} | ${company.careersUrl || ""}`,
   ).join("\n");
 }
 
@@ -76,6 +76,7 @@ export function presentDossier(dossier: CompanyDossierView): string {
     `Recommendation: ${dossier.recommendation}`,
     `Best route: ${dossier.bestRoute}`,
     `Priority: ${dossier.company.priorityBand}`,
+    `Outreach status: ${dossier.company.outreachStatus}`,
     `Trust: ${dossier.trustLevel}`,
     `Why it matters: ${dossier.recommendationReason}`,
     `Pitch theme: ${dossier.pitchTheme}`,

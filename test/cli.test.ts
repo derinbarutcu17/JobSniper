@@ -97,6 +97,7 @@ describe("cli", () => {
     expect(await runCli(["pipeline", "1"], baseDir)).toContain("Pipeline updated job");
     expect(await runCli(["assets", "1"], baseDir)).toContain("Assets:");
     expect(await runCli(["apply-state", "1", "--status", "applied", "--method", "ats"], baseDir)).toContain("Status: applied");
+    expect(await runCli(["company-state", "company:north", "--status", "sent_email", "--channel", "email", "--job", "1"], baseDir)).toContain("applied");
     expect(await runCli(["contact", "log", "company:north", "--channel", "email"], baseDir)).toContain("Logged contact attempt");
     expect(await runCli(["outcome", "log", "company:north", "--result", "reply"], baseDir)).toContain("Logged outcome");
     expect(await runCli(["experiments"], baseDir)).toContain("Route performance:");

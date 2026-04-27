@@ -59,6 +59,7 @@ It is especially good for workflows where:
 - Recommends a next action such as `apply_now`, `cold_email`, `watch`, or `discard`
 - Recommends a route such as `ats_only`, `direct_email_first`, or `founder_or_team_reachout`
 - Tracks outreach, applications, replies, interviews, and rejections
+- Supports explicit company-level outreach state updates without requiring a fake job row
 - Syncs state into Google Sheets
 - Exports a live dashboard snapshot for the private web UI
 
@@ -156,6 +157,12 @@ Typical agent workflow:
 5. sync Sheets
 6. refresh the live dashboard
 
+Canonical rule:
+
+- do not update sent/reached/applied state in markdown files
+- update it in Job Sniper only
+- then regenerate Sheets and the live dashboard from that DB-backed state
+
 ## CLI Commands
 
 ```text
@@ -176,6 +183,7 @@ Typical agent workflow:
 /sniper contacts [company-id-or-key]
 /sniper enrich company <company-id-or-key>
 /sniper contact log <company-id-or-key> --channel <email|linkedin|ats|founder> [--job <job-id>] [--note <text>]
+/sniper company-state <company-id-or-key> --status <reached|sent_email|talking|rejected|archived> [--channel <email|linkedin|ats|founder>] [--job <job-id>] [--note <text>]
 /sniper outcome log <company-id-or-key> --result <no_reply|reply|call|interview|rejected|positive_signal> [--job <job-id>] [--note <text>]
 /sniper experiments
 /sniper blacklist add [--company | --keyword] [--lane <lane>] <term>
@@ -237,9 +245,16 @@ npm run sniper -- dossier company:key
 
 ```bash
 npm run sniper -- apply-state 42 --status applied --method ats --note submitted via careers page
+npm run sniper -- company-state company:key --status sent_email --channel email --note intro sent
 npm run sniper -- contact log company:key --channel email --job 42 --note intro sent
 npm run sniper -- outcome log company:key --result reply --job 42 --note recruiter replied
 ```
+
+Use:
+
+- `apply-state` for specific job applications
+- `company-state` for company-level outreach truth such as reached, sent email, talking, rejected, or archived
+- `contact log` and `outcome log` when you want explicit event history alongside the derived state model
 
 ### 6. Sync projections
 
@@ -272,6 +287,11 @@ Current deployment flow:
 1. update SQLite-backed state
 2. run `npm run live:sync`
 3. run `npm run live:deploy` when you want production updated
+
+Generated status artifacts now include:
+
+- `dashboard/data/outreach-status.json`
+- `dashboard/data/outreach-status.md`
 
 ## Google Sheets
 

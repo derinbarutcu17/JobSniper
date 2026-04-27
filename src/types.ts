@@ -33,6 +33,7 @@ export type PriorityBand = "low" | "medium" | "high";
 export type ContactChannel = "email" | "linkedin" | "ats" | "founder";
 export type OutcomeResult = "no_reply" | "reply" | "call" | "interview" | "rejected" | "positive_signal";
 export type RunStatus = "running" | "succeeded" | "failed" | "partial";
+export type OutreachStatus = "new" | "reached" | "sent_email" | "applied" | "talking" | "rejected" | "archived";
 export type PipelineStatus =
   | "discovered"
   | "triaged"
@@ -355,6 +356,29 @@ export interface CompanyDecisionSnapshot {
   recommendationReason: string;
 }
 
+export interface CompanyOutreachStateRecord {
+  id: number;
+  company_id: number;
+  status: OutreachStatus;
+  last_contact_channel: ContactChannel | "";
+  last_job_id: number | null;
+  note: string;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyOutreachSnapshot {
+  companyId: number;
+  companyName: string;
+  status: OutreachStatus;
+  lastContactChannel: ContactChannel | "";
+  lastJobId: number | null;
+  latestNote: string;
+  latestActivityAt: string;
+  source: string;
+}
+
 export interface JobRecord {
   id: number;
   canonical_key: string;
@@ -563,6 +587,9 @@ export interface CompanySummary {
   directContactCount: number;
   priorityBand: PriorityBand;
   careersUrl: string;
+  outreachStatus: OutreachStatus;
+  lastContactChannel: ContactChannel | "";
+  latestActivityAt: string;
 }
 
 export interface CompanyDetail extends CompanySummary {
@@ -581,6 +608,7 @@ export interface CompanyDetail extends CompanySummary {
   pitchTheme: PitchTheme;
   pitchAngle: string;
   recommendationReason: string;
+  latestStatusNote: string;
 }
 
 export interface CompanyAggregate {

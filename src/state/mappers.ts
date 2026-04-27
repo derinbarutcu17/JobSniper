@@ -2,6 +2,7 @@ import type {
   CompanyAggregate,
   CompanyDetail,
   CompanyDossierView,
+  CompanyOutreachSnapshot,
   CompanySummary,
   ConfidenceBand,
   ContactLogEntry,
@@ -83,7 +84,7 @@ export function mapJobRecordToDetail(job: JobRecord): JobDetail {
   };
 }
 
-export function mapCompanyRowToSummary(company: Record<string, unknown>): CompanySummary {
+export function mapCompanyRowToSummary(company: Record<string, unknown>, outreach?: CompanyOutreachSnapshot): CompanySummary {
   return {
     id: Number(company.id ?? 0),
     canonicalKey: String(company.canonical_key ?? ""),
@@ -98,12 +99,15 @@ export function mapCompanyRowToSummary(company: Record<string, unknown>): Compan
     directContactCount: Number(company.direct_contact_count ?? 0),
     priorityBand: String(company.priority_band ?? "low") as CompanySummary["priorityBand"],
     careersUrl: String(company.careers_url ?? ""),
+    outreachStatus: outreach?.status ?? "new",
+    lastContactChannel: outreach?.lastContactChannel ?? "",
+    latestActivityAt: outreach?.latestActivityAt ?? "",
   };
 }
 
-export function mapCompanyRowToDetail(company: Record<string, unknown>): CompanyDetail {
+export function mapCompanyRowToDetail(company: Record<string, unknown>, outreach?: CompanyOutreachSnapshot): CompanyDetail {
   return {
-    ...mapCompanyRowToSummary(company),
+    ...mapCompanyRowToSummary(company, outreach),
     companyUrl: String(company.company_url ?? ""),
     aboutUrl: String(company.about_url ?? ""),
     teamUrl: String(company.team_url ?? ""),
@@ -119,6 +123,7 @@ export function mapCompanyRowToDetail(company: Record<string, unknown>): Company
     pitchTheme: String(company.pitch_theme ?? "generalist") as CompanyDetail["pitchTheme"],
     pitchAngle: String(company.pitch_angle ?? ""),
     recommendationReason: String(company.recommendation_reason ?? ""),
+    latestStatusNote: outreach?.latestNote ?? "",
   };
 }
 
@@ -163,8 +168,9 @@ export function buildCompanyAggregate(
   contacts: Array<Record<string, unknown>>,
   contactLog: ContactLogEntry[],
   outcomeLog: OutcomeLogEntry[],
+  outreach?: CompanyOutreachSnapshot,
 ): CompanyAggregate {
-  const companyDetail = mapCompanyRowToDetail(company);
+  const companyDetail = mapCompanyRowToDetail(company, outreach);
   const jobSummaries = jobs.map(mapJobRecordToSummary);
   const contactSummaries = contacts.map(mapContactRowToSummary);
   const evidence = [

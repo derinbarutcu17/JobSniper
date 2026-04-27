@@ -31,6 +31,7 @@ function help(): string {
     "  contacts [company-id-or-key]",
     "  enrich company <company-id-or-key>",
     "  contact log <company-id-or-key> --channel <email|linkedin|ats|founder> [--job <job-id>] [--note <text>]",
+    "  company-state <company-id-or-key> --status <reached|sent_email|talking|rejected|archived> [--channel <email|linkedin|ats|founder>] [--job <job-id>] [--note <text>]",
     "  outcome log <company-id-or-key> --result <no_reply|reply|call|interview|rejected|positive_signal> [--job <job-id>] [--note <text>]",
     "  experiments",
     "  requeue <url> [lane]",
@@ -250,6 +251,33 @@ export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<st
     }
     if (!channel) throw new Error("contact log requires --channel.");
     return app.contactLog({ companyRef, channel, jobId, note });
+  }
+
+  if (command === "company-state") {
+    const companyRef = rest[0];
+    if (!companyRef) throw new Error("company-state requires a company id or key.");
+    let status: "reached" | "sent_email" | "talking" | "rejected" | "archived" | undefined;
+    let channel: "email" | "linkedin" | "ats" | "founder" | undefined;
+    let jobId: number | undefined;
+    let note = "";
+    for (let index = 1; index < rest.length; index += 1) {
+      const token = rest[index];
+      if (token === "--status") {
+        status = rest[index + 1] as typeof status;
+        index += 1;
+      } else if (token === "--channel") {
+        channel = rest[index + 1] as typeof channel;
+        index += 1;
+      } else if (token === "--job") {
+        jobId = Number(rest[index + 1]);
+        index += 1;
+      } else if (token === "--note") {
+        note = rest.slice(index + 1).join(" ");
+        break;
+      }
+    }
+    if (!status) throw new Error("company-state requires --status.");
+    return app.companyState({ companyRef, status, channel, jobId, note });
   }
 
   if (command === "outcome" && rest[0] === "log") {

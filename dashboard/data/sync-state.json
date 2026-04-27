@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-04-27T19:08:23.737Z",
+  "dbHash": "a6cd64fa35f6d6128ab62cf0ca3ec0e67286a18a859f1fad3b6077b317f18e90",
+  "snapshotHash": "e103667ac34fedda59bc3373ac9d7ed9eba1dfe536c72baf1d904d0767a1c723",
+  "summary": {
+    "companies": 77,
+    "directContacts": 28,
+    "activeJobs": 1,
+    "reached": 0,
+    "sentEmails": 3,
+    "applications": 1,
+    "talking": 0,
+    "rejected": 0,
+    "applied": 1,
+    "contacted": 3
+  }
+}

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { google } from "googleapis";
 import { loadConfig } from "../normalization/config.js";
 import { getStoredSpreadsheetId, openDatabase, saveSpreadsheetState, updateJobManualFields } from "./db.js";
+import { companyOutreachSnapshotMap } from "./outreach-state.js";
 import { resolveCompanyBestContact } from "../ingestion/company-enrich.js";
 import { scoreContactCandidate } from "../normalization/contact-quality.js";
 import type { ContactCandidate, JobRecord, SheetSyncResult } from "../types.js";
@@ -56,6 +57,8 @@ const JOB_HEADERS = [
   "url",
   "apply_url",
   "best_contact",
+  "pipeline_status",
+  "company_outreach_status",
   "explanation_short",
   "manual_status",
   "priority",
@@ -98,6 +101,10 @@ const COMPANY_HEADERS = [
   "press_url",
   "linkedin_url",
   "best_contact",
+  "outreach_status",
+  "last_contact_channel",
+  "latest_activity_at",
+  "latest_status_note",
   "source_urls",
   "description",
 ] as const;
@@ -338,6 +345,7 @@ function scoreContactForCompany(
 }
 
 function jobRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
+  const companyOutreach = companyOutreachSnapshotMap(db);
   const jobs = db
     .prepare("SELECT * FROM jobs WHERE status != 'excluded' ORDER BY score DESC, updated_at DESC")
     .all() as JobRecord[];
@@ -380,6 +388,8 @@ function jobRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
     url: job.url,
     apply_url: job.apply_url,
     best_contact: bestContact(job),
+    pipeline_status: job.pipeline_status || "discovered",
+    company_outreach_status: companyOutreach.get(Number(job.company_id ?? 0))?.status ?? "new",
     explanation_short: shortExplanation(job),
     manual_status: job.manual_status || "",
     priority: job.priority || "",
@@ -390,6 +400,7 @@ function jobRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
 }
 
 function companyRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
+  const outreach = companyOutreachSnapshotMap(db);
   const companies = db
     .prepare(`
       SELECT *
@@ -473,6 +484,10 @@ function companyRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
         }
         return resolveCompanyBestContact(company);
       })(),
+    outreach_status: outreach.get(Number(company.id ?? 0))?.status ?? "new",
+    last_contact_channel: outreach.get(Number(company.id ?? 0))?.lastContactChannel ?? "",
+    latest_activity_at: outreach.get(Number(company.id ?? 0))?.latestActivityAt ?? "",
+    latest_status_note: outreach.get(Number(company.id ?? 0))?.latestNote ?? "",
     source_urls: parseJsonList(String(company.source_urls ?? "[]")).join(" | "),
     description: String(company.description ?? ""),
   }));
@@ -583,6 +598,7 @@ function dailyJobTabs(
   db: ReturnType<typeof openDatabase>["db"],
   prefix = "Jobs ",
 ): Array<{ title: string; rows: Row[] }> {
+  const companyOutreach = companyOutreachSnapshotMap(db);
   const jobs = db
     .prepare("SELECT * FROM jobs WHERE status != 'excluded' ORDER BY created_at DESC, updated_at DESC")
     .all() as JobRecord[];
@@ -623,6 +639,8 @@ function dailyJobTabs(
         posted_at: job.posted_at,
         url: job.url,
         best_contact: bestContact(job),
+        pipeline_status: job.pipeline_status || "discovered",
+        company_outreach_status: companyOutreach.get(Number(job.company_id ?? 0))?.status ?? "new",
         explanation_short: shortExplanation(job),
         manual_status: job.manual_status || "",
         priority: job.priority || "",

@@ -6,7 +6,9 @@ import { canonicalCompanyKey, canonicalContactKey, canonicalJobKey, domainFromUr
 import type {
   ApplicationMethod,
   ApplicationRecord,
+  CompanyOutreachStateRecord,
   PipelineStatus,
+  OutreachStatus,
   CompanyDecisionSnapshot,
   CompanyRecordInput,
   ConfidenceBand,
@@ -341,6 +343,20 @@ function createSchema(db: Database.Database): void {
       created_at TEXT NOT NULL,
       FOREIGN KEY(company_id) REFERENCES companies(id),
       FOREIGN KEY(job_id) REFERENCES jobs(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS company_outreach_state (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER UNIQUE NOT NULL,
+      status TEXT DEFAULT 'new',
+      last_contact_channel TEXT DEFAULT '',
+      last_job_id INTEGER,
+      note TEXT DEFAULT '',
+      source TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(company_id) REFERENCES companies(id),
+      FOREIGN KEY(last_job_id) REFERENCES jobs(id)
     );
 
     CREATE TABLE IF NOT EXISTS applications (
@@ -1465,6 +1481,61 @@ export function logOutcomeRow(
     note,
     created_at: createdAt,
   };
+}
+
+export function getCompanyOutreachState(db: Database.Database, companyId: number): CompanyOutreachStateRecord | undefined {
+  return db.prepare("SELECT * FROM company_outreach_state WHERE company_id = ?").get(companyId) as CompanyOutreachStateRecord | undefined;
+}
+
+export function listCompanyOutreachStates(db: Database.Database): CompanyOutreachStateRecord[] {
+  return db.prepare("SELECT * FROM company_outreach_state ORDER BY updated_at DESC").all() as CompanyOutreachStateRecord[];
+}
+
+export function upsertCompanyOutreachState(
+  db: Database.Database,
+  input: {
+    companyId: number;
+    status: OutreachStatus;
+    lastContactChannel?: ContactChannel | "";
+    lastJobId?: number | null;
+    note?: string;
+    source?: string;
+  },
+): CompanyOutreachStateRecord {
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO company_outreach_state (
+      company_id, status, last_contact_channel, last_job_id, note, source, created_at, updated_at
+    ) VALUES (
+      @company_id, @status, @last_contact_channel, @last_job_id, @note, @source, @created_at, @updated_at
+    )
+    ON CONFLICT(company_id) DO UPDATE SET
+      status = excluded.status,
+      last_contact_channel = CASE
+        WHEN excluded.last_contact_channel != '' THEN excluded.last_contact_channel
+        ELSE company_outreach_state.last_contact_channel
+      END,
+      last_job_id = COALESCE(excluded.last_job_id, company_outreach_state.last_job_id),
+      note = CASE
+        WHEN excluded.note != '' THEN excluded.note
+        ELSE company_outreach_state.note
+      END,
+      source = CASE
+        WHEN excluded.source != '' THEN excluded.source
+        ELSE company_outreach_state.source
+      END,
+      updated_at = excluded.updated_at
+  `).run({
+    company_id: input.companyId,
+    status: input.status,
+    last_contact_channel: input.lastContactChannel ?? "",
+    last_job_id: input.lastJobId ?? null,
+    note: input.note ?? "",
+    source: input.source ?? "",
+    created_at: now,
+    updated_at: now,
+  });
+  return getCompanyOutreachState(db, input.companyId)!;
 }
 
 export function listContactLog(db: Database.Database): ContactLogEntry[] {
