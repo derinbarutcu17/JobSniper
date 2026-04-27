@@ -101,4 +101,9 @@ describe("cli", () => {
     expect(await runCli(["outcome", "log", "company:north", "--result", "reply"], baseDir)).toContain("Logged outcome");
     expect(await runCli(["experiments"], baseDir)).toContain("Route performance:");
   });
+
+  it("keeps sheet pull opt-in only", async () => {
+    const baseDir = makeTempDir();
+    await expect(runCli(["sheet", "pull"], baseDir)).rejects.toThrow("sheet pull is disabled by default");
+  });
 });

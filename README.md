@@ -244,7 +244,13 @@ This closes the loop so the system can surface which routes and themes are actua
 /sniper sheet pull
 ```
 
-Use Sheets as the operational board if you want browser-based review and editing without changing git.
+Use Sheets as an integration or mirror, not as the primary writable state.
+
+`sheet pull` is disabled by default to protect the canonical SQLite model. Only use it intentionally:
+
+```bash
+SNIPER_ENABLE_SHEET_PULL=1 npm run sniper -- sheet pull
+```
 
 ## Live Dashboard Sync
 
@@ -272,6 +278,13 @@ This will:
 - export the latest dashboard snapshot
 - refresh the local `jobsniper-live` folder
 - deploy the updated snapshot to Vercel production
+
+## Cleanup Phases
+
+The anti-bloat refactor is tracked here:
+
+- [Cleanup Phases](/Users/derin/Desktop/CODING/Job%20sniper/docs/CLEANUP-PHASES.md)
+- [State Model](/Users/derin/Desktop/CODING/Job%20sniper/docs/STATE-MODEL.md)
 
 ## Role Packs and Customization
 

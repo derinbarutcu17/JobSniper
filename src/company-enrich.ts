@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { mapLimit, withRetries } from "./lib/async.js";
 import { uniqueNonEmpty } from "./lib/text.js";
 import { canonicalContactKey, domainFromUrl } from "./lib/url.js";
+import { isPlaceholderEmail, scoreContactCandidate, isStrongDirectEmail, isUsableDirectEmail } from "./normalization/contact-quality.js";
 import { buildPageRecord, extractContacts } from "./search/extract.js";
 import { getSearchProviders } from "./search/web.js";
 import type {
@@ -25,31 +26,6 @@ function parseJsonList(value: unknown): string[] {
   }
 }
 
-function isEmail(value: string): boolean {
-  return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value);
-}
-
-function isPlaceholderEmail(value: string): boolean {
-  const lower = value.toLowerCase();
-  return (
-    lower.endsWith("@example.com") ||
-    lower.endsWith("@company.com") ||
-    lower.includes("max.mustermann") ||
-    lower.includes("john.doe") ||
-    lower.includes("jane.doe") ||
-    /^name@/i.test(lower) ||
-    lower.includes("do-not-reply") ||
-    lower.includes("noreply") ||
-    lower.includes("no-reply") ||
-    lower.endsWith("@yourdomain.com") ||
-    lower.endsWith("@doe.com") ||
-    lower.endsWith("@tech.com") ||
-    lower.includes("sentry.io") ||
-    lower.includes("@2x") ||
-    /\.(png|jpg|jpeg|svg|webp|gif)$/i.test(lower)
-  );
-}
-
 const GENERIC_STAGE_LABELS = new Set(["", "startup", "berlin startup list", "startup list", "watchlist"]);
 
 function normalizedCompanyDomain(value: string): string {
@@ -60,83 +36,11 @@ function emailDomain(value: string): string {
   return normalizedCompanyDomain(value.split("@")[1] ?? "");
 }
 
-function kindWeight(kind: ContactKind): number {
-  switch (kind) {
-    case "founder_email":
-      return 34;
-    case "general_contact_email":
-      return 30;
-    case "recruiter_email":
-      return 24;
-    case "application_email":
-      return 16;
-    case "careers_email":
-      return 14;
-    case "linkedin_person":
-      return 16;
-    case "linkedin_company":
-      return 12;
-    case "team_page":
-      return 11;
-    case "contact_form":
-      return 8;
-    case "press_email":
-      return -10;
-    default:
-      return 0;
-  }
-}
-
-export function scoreContactCandidate(companyDomain: string, contact: ContactCandidate): number {
-  const normalizedDomain = normalizedCompanyDomain(companyDomain);
-  const email = contact.email.trim().toLowerCase();
-  const sourceUrl = contact.sourceUrl.trim().toLowerCase();
-  let score = kindWeight(contact.kind);
-
-  if (email) {
-    score += 20;
-    const domain = emailDomain(email);
-    if (normalizedDomain && domain === normalizedDomain) score += 18;
-    if (normalizedDomain && domain && domain !== normalizedDomain) score -= 22;
-    if (/^(hello|contact|info)@/.test(email)) score += 12;
-    if (/^(founder|ceo|jobs|careers|talent|people|team)@/.test(email)) score += 9;
-    if (/^(support|payment|billing|privacy|legal|press|ads|affiliate|offers|notification|help)@/.test(email)) score -= 18;
-    if (/^(security|abuse|compliance|gdpr|datenschutz)@/.test(email)) score -= 22;
-    if (/noreply|no-reply|do-not-reply/.test(email)) score -= 40;
-    if (domain && /(calendly\.com|zendesk\.com|hubspot|intercom|typeform\.com|heydata\.eu|greenhouse\.io|lever\.co)$/.test(domain)) {
-      score -= 24;
-    }
-    if (contact.confidence === "high") score += 8;
-    if (contact.confidence === "low") score -= 4;
-    return score;
-  }
-
-  if (contact.linkedinUrl) {
-    score += contact.kind === "linkedin_person" ? 8 : 4;
-  }
-  if (sourceUrl) {
-    if (/\/(contact|imprint|legal|privacy)(\/|$)/.test(sourceUrl)) score += 14;
-    else if (/\/(team|leadership|founders?)(\/|$)/.test(sourceUrl)) score += 12;
-    else if (/\/(careers?|jobs?|join)(\/|$)/.test(sourceUrl)) score += 8;
-    else score += 2;
-  }
-
-  return score;
-}
-
 function sortContactsForCompany(companyDomain: string, contacts: ContactCandidate[]): ContactCandidate[] {
   return contacts
     .map((contact) => ({ contact, score: scoreContactCandidate(companyDomain, contact) }))
     .sort((left, right) => right.score - left.score)
     .map(({ contact }) => contact);
-}
-
-function isStrongDirectEmail(companyDomain: string, contact: ContactCandidate): boolean {
-  return Boolean(contact.email) && scoreContactCandidate(companyDomain, contact) >= 54;
-}
-
-function isUsableDirectEmail(companyDomain: string, contact: ContactCandidate): boolean {
-  return Boolean(contact.email) && scoreContactCandidate(companyDomain, contact) >= 42;
 }
 
 function dedupeContacts(contacts: ContactCandidate[]): ContactCandidate[] {
@@ -369,7 +273,7 @@ export function resolveCompanyBestContact(company: CompanyRow): string {
   const publicContacts = parseJsonList(company.public_contacts);
   const companyDomain = normalizedCompanyDomain(String(company.domain ?? domainFromUrl(String(company.company_url ?? "")) ?? ""));
   const strongDirectEmail = publicContacts
-    .filter((entry) => isEmail(entry) && !isPlaceholderEmail(entry))
+    .filter((entry) => /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(entry) && !isPlaceholderEmail(entry))
     .map((email) => ({
       email,
       score: scoreContactCandidate(companyDomain, {

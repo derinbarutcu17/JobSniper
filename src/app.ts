@@ -20,7 +20,7 @@ import { canonicalCompanyKey, canonicalContactKey, domainFromUrl, normalizeUrl }
 import { getDefaultCompanyWatchLane } from "./role-packs.js";
 import { buildPageRecord, extractContacts } from "./search/extract.js";
 import { getSearchProviders } from "./search/web.js";
-import { pullSheets, syncSheets, type SheetGateway } from "./sheets.js";
+import type { SheetGateway } from "./sheets.js";
 import type { Dependencies, SearchLane } from "./types.js";
 import { presentCompanies, presentContacts, presentDossier, presentJobDetail, presentJobList, presentPipelineResult, presentRunResult, presentStats, presentTriage } from "./presenters.js";
 import { createCompaniesService } from "./services/companies-service.js";
@@ -264,6 +264,12 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
     },
 
     async sheetPull() {
+      if (process.env.SNIPER_ENABLE_SHEET_PULL !== "1") {
+        throw new SniperError(
+          "sheet pull is disabled by default. SQLite is canonical. Set SNIPER_ENABLE_SHEET_PULL=1 only for an intentional manual import.",
+          "config_error",
+        );
+      }
       const result = await sheetSyncService.pull();
       return `Pulled ${result.pulled} rows from spreadsheet ${result.spreadsheetId}.`;
     },

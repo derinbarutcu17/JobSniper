@@ -12,6 +12,7 @@ import {
 } from "../db.js";
 import { mapLimit, withRetries, withTimeout } from "../lib/async.js";
 import { createDefaultDependencies } from "../lib/http.js";
+import { earlyFilterListing } from "../normalization/listing-filter.js";
 import { canonicalCompanyKey, canonicalContactKey, domainFromUrl, normalizeUrl } from "../lib/url.js";
 import { buildDecisionSnapshot } from "../decision.js";
 import { loadProfile } from "../profile.js";
@@ -218,6 +219,13 @@ export async function runDiscovery(
   const founderSurfaceCompanyKeys = new Set<string>();
 
   const processListing = (listing: (typeof directListings)[number]) => {
+    const earlyDecision = earlyFilterListing(config, profile, listing);
+    if (!earlyDecision.keep) {
+      excluded += 1;
+      context?.warnings.push(`Dropped listing early: ${listing.title} (${earlyDecision.reason})`);
+      return;
+    }
+
     if (isCompanyWatchLane(config, listing.lane) && !listing.isRealJobPage) {
       const companyUrl = listing.companyUrl || listing.url;
       const companyInput: CompanyRecordInput = {

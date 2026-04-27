@@ -2,7 +2,8 @@ import fs from "node:fs";
 import { google } from "googleapis";
 import { loadConfig } from "./config.js";
 import { getStoredSpreadsheetId, openDatabase, saveSpreadsheetState, updateJobManualFields } from "./db.js";
-import { resolveCompanyBestContact, scoreContactCandidate } from "./company-enrich.js";
+import { resolveCompanyBestContact } from "./company-enrich.js";
+import { scoreContactCandidate } from "./normalization/contact-quality.js";
 import type { ContactCandidate, JobRecord, SheetSyncResult } from "./types.js";
 
 type Row = Record<string, string>;

@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadConfig } from "../src/config.ts";
 import { getStoredSpreadsheetId, openDatabase } from "../src/db.ts";
 import { resolveCompanyBestContact } from "../src/company-enrich.ts";
+import { isEmail, isPlaceholderEmail, isWeakOutreachEmail, scoreContactCandidate } from "../src/normalization/contact-quality.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -97,37 +98,24 @@ function safeNumber(value: unknown): number {
   return Number.isFinite(number) ? number : 0;
 }
 
-function isEmail(value: string): boolean {
-  return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value);
-}
-
-function isPlaceholderEmail(value: string): boolean {
-  const lower = value.toLowerCase();
-  return (
-    lower.endsWith("@example.com") ||
-    lower.includes("max.mustermann") ||
-    lower.includes("john.doe") ||
-    lower.includes("jane.doe") ||
-    lower.includes("noreply") ||
-    lower.includes("no-reply") ||
-    lower.includes("do-not-reply")
-  );
-}
-
-function isWeakOutreachEmail(value: string): boolean {
-  const localPart = value.toLowerCase().split("@")[0] ?? "";
-  return /^(support|help|privacy|legal|security|abuse|billing|payment|press|media|accommodations?|reasonable-accommodations?)$/.test(localPart);
-}
-
 function contactScore(value: string): number {
   if (!value) return 0;
   if (!isEmail(value)) return 1;
   if (isPlaceholderEmail(value)) return -100;
-  if (isWeakOutreachEmail(value)) return 1;
-  const localPart = value.toLowerCase().split("@")[0] ?? "";
-  if (/^(founders?|ceo|team|people|talent|jobs|careers|work)$/.test(localPart)) return 5;
-  if (/^(hello|contact|info)$/.test(localPart)) return 4;
-  return 3;
+  const contact = {
+    kind: "general_contact_email",
+    name: "",
+    title: "",
+    email: value,
+    linkedinUrl: "",
+    sourceUrl: "",
+    confidence: "medium",
+    evidenceType: "export_projection",
+    evidenceExcerpt: value,
+    isPublic: true,
+    pageType: "generic",
+  } as const;
+  return scoreContactCandidate(domainFromValue(value), contact);
 }
 
 function domainFromValue(value: string): string {
