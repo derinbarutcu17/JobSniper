@@ -21,6 +21,9 @@ npm install
 echo "Running typecheck..."
 npm run typecheck
 
+echo "Checking CLI help..."
+npm run sniper -- help
+
 cat <<'EOF'
 
 Setup complete.
@@ -29,10 +32,10 @@ Next steps:
   1. Review config.json
   2. Onboard a profile:
      npm run sniper -- onboard "/absolute/path/to/cv.pdf"
-  3. Verify the CLI:
-     npm run sniper -- help
-  4. Run a first discovery pass:
+  3. Run a discovery pass:
      npm run sniper -- run
+  4. Target student roles:
+     npm run sniper -- run --lane student_jobs
 
 Google Sheets is optional. Configure credentials first if you want sync.
 EOF

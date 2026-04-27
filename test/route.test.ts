@@ -71,4 +71,30 @@ describe("route inference", () => {
     expect(route.recommendedRoute).toBe("direct_email_first");
     expect(route.outreachLeverageScore).toBeGreaterThan(50);
   });
+
+  it("does not treat weak inboxes as strong outreach routes", () => {
+    const route = inferRoute(
+      listing({
+        publicContacts: [
+          {
+            kind: "general_contact_email",
+            name: "",
+            title: "",
+            email: "support@canvas.example.com",
+            linkedinUrl: "",
+            sourceUrl: "https://canvas.example.com/contact",
+            confidence: "medium",
+            evidenceType: "mailto",
+            evidenceExcerpt: "",
+            isPublic: true,
+            pageType: "contact_page",
+          },
+        ],
+      }),
+      70,
+      10,
+    );
+    expect(route.recommendedRoute).not.toBe("direct_email_first");
+    expect(route.outreachLeverageScore).toBeLessThan(50);
+  });
 });

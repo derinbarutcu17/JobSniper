@@ -163,7 +163,6 @@ export function deriveProfileSummary(content: string, config: SniperConfig = def
   const seniority = deriveTargetSeniority(content);
   const preferredLocations = [
     ...(includesAny(normalized, ["berlin"]) ? ["Berlin"] : []),
-    ...(includesAny(normalized, ["germany", "deutschland", "almanya"]) ? ["Germany"] : []),
     ...(includesAny(normalized, ["remote", "uzaktan"]) ? ["Remote"] : []),
   ];
 

@@ -390,7 +390,16 @@ function jobRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
 
 function companyRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
   const companies = db
-    .prepare("SELECT * FROM companies ORDER BY startup_score DESC, company_fit_score DESC, updated_at DESC")
+    .prepare(`
+      SELECT *
+      FROM companies
+      ORDER BY
+        CASE priority_band WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC,
+        CASE recommendation WHEN 'cold_email' THEN 4 WHEN 'apply_now' THEN 3 WHEN 'enrich_first' THEN 2 WHEN 'watch' THEN 1 ELSE 0 END DESC,
+        startup_score DESC,
+        company_fit_score DESC,
+        updated_at DESC
+    `)
     .all() as Array<Record<string, unknown>>;
   const contacts = db
     .prepare(`
@@ -483,7 +492,7 @@ function contactRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
   return contacts.map((contact) => ({
     canonical_key: String(contact.canonical_key ?? ""),
     company_name: String(contact.company_name ?? ""),
-    kind: String(contact.contact_kind ?? ""),
+    kind: String(contact.contact_kind || contact.kind || (contact.email ? "general_contact_email" : contact.linkedin_url ? "linkedin_company" : "contact_form")),
     confidence: String(contact.confidence ?? ""),
     name: String(contact.name ?? ""),
     title: String(contact.title ?? ""),

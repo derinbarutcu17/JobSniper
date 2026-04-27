@@ -74,7 +74,14 @@ function extractExplicitEmails(text: string): string[] {
   const pattern = /(?:^|[^A-Z0-9._%+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})(?![A-Z0-9._%+-])/gi;
   for (const match of text.matchAll(pattern)) {
     const email = match[1]?.trim();
-    if (email && !looksLikePlaceholderEmail(email)) {
+    const surrounding = text.slice(Math.max(0, (match.index ?? 0) - 8), (match.index ?? 0) + (email?.length ?? 0) + 8);
+    if (
+      email &&
+      email.length <= 254 &&
+      /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email) &&
+      !looksLikePlaceholderEmail(email) &&
+      !/(@2x|\.png|\.jpg|\.jpeg|\.svg|\.webp|\.gif|noreply|no-reply|do-not-reply)/i.test(surrounding)
+    ) {
       emails.add(email);
     }
   }

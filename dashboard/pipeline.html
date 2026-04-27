@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pipeline · Job Sniper</title>
+    <link rel="stylesheet" href="./assets/styles.css">
+  </head>
+  <body data-page="pipeline">
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <h1>Pipeline</h1>
+          <p>Talking stage, applied, contacted, and rejected buckets.</p>
+        </div>
+        <div class="meta" data-sync-meta></div>
+      </header>
+      <nav class="nav">
+        <a href="./index.html">Overview</a>
+        <a href="./companies.html">Companies</a>
+        <a href="./jobs.html">Active Jobs</a>
+        <a href="./outreach.html">Sent</a>
+        <a class="active" href="./pipeline.html">Pipeline</a>
+      </nav>
+      <section class="stats-grid" data-stats></section>
+      <section class="panel">
+        <div class="section-head">
+          <h2>Pipeline stages</h2>
+          <p>This page should be driven by Job Sniper state changes, not manual spreadsheet edits.</p>
+        </div>
+        <div class="toolbar">
+          <input data-search type="search" placeholder="Search pipeline">
+          <select data-filter>
+            <option value="all">All stages</option>
+            <option value="talking">Talking</option>
+            <option value="applied">Applied</option>
+            <option value="contacted">Contacted</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div data-list></div>
+      </section>
+      <section data-error></section>
+    </main>
+    <script type="module" src="./assets/app.js"></script>
+  </body>
+  </html>

@@ -44,7 +44,7 @@ without needing to untangle the core logic again.
 ## What It Does
 
 - Onboards a profile from raw text or a local file path
-- Searches across web search results, RSS feeds, ATS boards, and structured job pages
+- Searches across web search results, RSS feeds, ATS boards, direct job-board adapters, and structured job pages
 - Tracks jobs, companies, contacts, manual notes, outreach state, and outcomes
 - Scores opportunities against a profile
 - Adds a strategic decision layer on top of raw score
@@ -166,11 +166,18 @@ Or use a local file:
 ```text
 /sniper run
 /sniper run --lane design_jobs
-/sniper run --lane policy_jobs
+/sniper run --lane student_jobs
 /sniper run --company-watch
 ```
 
 This updates the local database with discovered jobs, companies, contacts, and strategic recommendations.
+
+Configured source types can include:
+
+- search providers
+- RSS feeds
+- ATS boards
+- direct job-board adapters such as LinkedIn and Google Jobs
 
 ### 3. Review what deserves time
 
@@ -253,6 +260,8 @@ The search engine is role-pack-driven. Each lane is defined in `config.json` wit
 - optional `mismatchTerms`
 - optional `startupTerms`
 - optional `companyTerms`
+
+Built-in presets now include `design_jobs`, `ai_coding_jobs`, `student_jobs`, and `company_watch`.
 
 Main customization points:
 

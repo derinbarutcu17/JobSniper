@@ -21,7 +21,7 @@ export const defaultConfig: SniperConfig = {
     retries: 2,
     timeoutMs: 10000,
     priorityCities: ["Berlin"],
-    priorityCountries: ["Germany", "Deutschland"],
+    priorityCountries: ["Berlin"],
     remoteScopes: ["remote", "hybrid"],
   },
   lanes: builtInRolePacks,
@@ -34,6 +34,15 @@ export const defaultConfig: SniperConfig = {
       { name: "Wellfound Berlin Startups", provider: "wellfound", url: "https://wellfound.com/startups/location/berlin-berlin", lane: "company_watch" },
       { name: "Wellfound Berlin Design Jobs", provider: "wellfound", url: "https://wellfound.com/location/berlin-berlin", lane: "design_jobs" },
       { name: "Wellfound Berlin AI / Engineering Jobs", provider: "wellfound", url: "https://wellfound.com/location/berlin-berlin", lane: "ai_coding_jobs" },
+      { name: "Wellfound Berlin Student Jobs", provider: "wellfound", url: "https://wellfound.com/location/berlin-berlin", lane: "student_jobs" },
+    ],
+    jobBoards: [
+      { name: "LinkedIn Berlin Design", provider: "linkedin", lane: "design_jobs", location: "Berlin, Germany", maxResults: 25 },
+      { name: "LinkedIn Berlin AI", provider: "linkedin", lane: "ai_coding_jobs", location: "Berlin, Germany", maxResults: 25 },
+      { name: "LinkedIn Berlin Student", provider: "linkedin", lane: "student_jobs", location: "Berlin, Germany", maxResults: 25 },
+      { name: "Google Jobs Berlin Design", provider: "google_jobs", lane: "design_jobs", location: "Berlin", maxResults: 10 },
+      { name: "Google Jobs Berlin AI", provider: "google_jobs", lane: "ai_coding_jobs", location: "Berlin", maxResults: 10 },
+      { name: "Google Jobs Berlin Student", provider: "google_jobs", lane: "student_jobs", location: "Berlin", maxResults: 10 },
     ],
   },
   blacklist: {
@@ -106,6 +115,7 @@ function mergeConfig(base: SniperConfig, overrides: ConfigOverrides): SniperConf
     sources: {
       rss: overrides.sources?.rss ?? base.sources.rss,
       atsBoards: overrides.sources?.atsBoards ?? base.sources.atsBoards,
+      jobBoards: overrides.sources?.jobBoards ?? base.sources.jobBoards,
     },
     blacklist: {
       companies: overrides.blacklist?.companies ?? base.blacklist.companies,
@@ -233,6 +243,18 @@ function validateConfig(config: SniperConfig): SniperConfig {
     }
   }
 
+  for (const board of config.sources.jobBoards) {
+    if (!(board.lane in config.lanes)) {
+      throw new SniperError(`Job-board source "${board.name}" references unknown lane "${board.lane}".`, "config_error");
+    }
+    if (board.provider !== "linkedin" && board.provider !== "google_jobs") {
+      throw new SniperError(`Job-board source "${board.name}" has unsupported provider "${String(board.provider)}".`, "config_error");
+    }
+    if (board.maxResults !== undefined && (!Number.isFinite(board.maxResults) || board.maxResults <= 0)) {
+      throw new SniperError(`Job-board source "${board.name}" must set maxResults to a positive number.`, "config_error");
+    }
+  }
+
   return config;
 }
 
@@ -267,6 +289,7 @@ function migrateLegacyConfig(raw: Record<string, unknown>): ConfigOverrides {
         .filter((entry) => entry.type === "rss" && typeof entry.url === "string")
         .map((entry) => ({ name: String(entry.name ?? entry.url), url: String(entry.url) })),
       atsBoards: defaultConfig.sources.atsBoards,
+      jobBoards: defaultConfig.sources.jobBoards,
     },
     blacklist: {
       companies: Array.isArray(blacklist.companies)

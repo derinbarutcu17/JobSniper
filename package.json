@@ -6,10 +6,15 @@
   "description": "OpenClaw-native job intelligence skill for role discovery, company research, and public-contact outreach workflows.",
   "scripts": {
     "sniper": "node ./scripts/run-sniper.mjs",
+    "build:runtime": "tsc -p tsconfig.runtime.json",
+    "dashboard:export": "npx tsx ./scripts/export-dashboard-data.ts",
+    "sync:state": "npm run dashboard:export && npm run sniper -- sheet sync",
+    "pretest": "node ./scripts/repair-vitest.mjs",
     "test": "vitest run test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@vitest/utils": "^3.2.4",
     "better-sqlite3": "^12.4.1",
     "cheerio": "^1.1.2",
     "fast-xml-parser": "^5.3.0",
@@ -21,7 +26,8 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.6.0",
+    "@vitest/runner": "^4.0.8",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.8"
   }
 }

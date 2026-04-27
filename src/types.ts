@@ -1,6 +1,6 @@
 export type LaneId = string;
 export type SearchLane = LaneId;
-export type SourceType = "search" | "rss" | "ats" | "page" | "sitemap" | "career_page" | "team_page";
+export type SourceType = "search" | "rss" | "ats" | "job_board" | "page" | "sitemap" | "career_page" | "team_page";
 export type WorkModel = "remote" | "hybrid" | "onsite" | "unknown";
 export type Category = "Good Match" | "Mid Match" | "Low Match" | "Excluded";
 export type LaneType = "job" | "company_watch";
@@ -79,6 +79,15 @@ export interface AtsBoardSource {
   lane?: LaneId;
 }
 
+export interface JobBoardSource {
+  name: string;
+  provider: "linkedin" | "google_jobs";
+  lane: LaneId;
+  query?: string;
+  location?: string;
+  maxResults?: number;
+}
+
 export interface SniperConfig {
   search: {
     maxResultsPerQuery: number;
@@ -98,6 +107,7 @@ export interface SniperConfig {
   sources: {
     rss: RssSource[];
     atsBoards: AtsBoardSource[];
+    jobBoards: JobBoardSource[];
   };
   blacklist: {
     companies: string[];

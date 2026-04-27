@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { openDatabase, upsertCompany, upsertJob } from "../src/db.js";
+import { openDatabase, upsertCompany, upsertJob, upsertPageCache } from "../src/db.js";
 import { loadConfig } from "../src/config.js";
 import { makeTempDir } from "./helpers.js";
 
@@ -362,5 +362,39 @@ describe("legacy migration", () => {
     expect(company.stage_text).toBe("");
     expect(company.startup_score).toBe(8);
     expect(company.is_startup_candidate).toBe(0);
+  });
+
+  it("writes page cache rows with the expected snake_case bindings", () => {
+    const baseDir = makeTempDir();
+    const { db } = openDatabase(baseDir);
+
+    expect(() =>
+      upsertPageCache(db, {
+        normalizedUrl: "https://example.com/jobs/1",
+        url: "https://example.com/jobs/1?utm_source=x",
+        domain: "example.com",
+        sourceType: "page",
+        intent: "job",
+        pageType: "job_detail",
+        html: "<html><body>job</body></html>",
+        text: "job",
+        fetchStatus: 200,
+        usedBrowserFallback: false,
+      }),
+    ).not.toThrow();
+
+    const row = db.prepare("SELECT normalized_url, url, source_type, fetch_status, used_browser_fallback FROM pages").get() as {
+      normalized_url: string;
+      url: string;
+      source_type: string;
+      fetch_status: number;
+      used_browser_fallback: number;
+    };
+
+    expect(row.normalized_url).toBe("https://example.com/jobs/1");
+    expect(row.url).toBe("https://example.com/jobs/1?utm_source=x");
+    expect(row.source_type).toBe("page");
+    expect(row.fetch_status).toBe(200);
+    expect(row.used_browser_fallback).toBe(0);
   });
 });

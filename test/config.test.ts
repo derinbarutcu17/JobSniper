@@ -5,6 +5,23 @@ import { loadConfig } from "../src/config.js";
 import { makeTempDir } from "./helpers.js";
 
 describe("config validation", () => {
+  it("includes built-in student lane defaults", () => {
+    const config = loadConfig(makeTempDir());
+    expect(config.lanes.student_jobs).toBeDefined();
+    expect(config.sources.atsBoards.some((board) => board.lane === "student_jobs")).toBe(true);
+    expect(config.sources.jobBoards.some((board) => board.lane === "student_jobs")).toBe(true);
+    expect(config.blacklist.lanes.student_jobs).toEqual([]);
+    expect(config.lanes.student_jobs.queries.en.some((query) => /werkstudent|internship|praktikum/i.test(query))).toBe(true);
+  });
+
+  it("targets Berlin startup directories in company watch queries", () => {
+    const config = loadConfig(makeTempDir());
+    expect(
+      config.lanes.company_watch.queries.en.some((query) => /startupberlin|ai\.berlin|startups-list|seedtable|handpickedberlin/i.test(query)),
+    ).toBe(true);
+    expect(config.lanes.company_watch.companyTerms).toContain("Berlin");
+  });
+
   it("rejects enabled lanes with no queries or keywords", () => {
     const baseDir = makeTempDir();
     fs.writeFileSync(
@@ -58,5 +75,29 @@ describe("config validation", () => {
     );
 
     expect(() => loadConfig(baseDir)).toThrow('ATS source "Ghost Board" references unknown lane "ghost_lane".');
+  });
+
+  it("rejects malformed job-board sources", () => {
+    const baseDir = makeTempDir();
+    fs.writeFileSync(
+      path.join(baseDir, "config.json"),
+      JSON.stringify(
+        {
+          sources: {
+            jobBoards: [
+              {
+                name: "Broken Board",
+                provider: "monster",
+                lane: "design_jobs",
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    expect(() => loadConfig(baseDir)).toThrow('Job-board source "Broken Board" has unsupported provider "monster".');
   });
 });

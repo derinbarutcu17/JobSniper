@@ -51,11 +51,12 @@ function parseLane(input: string | undefined, baseDir: string): SearchLane | und
 
 export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<string> {
   const [command, ...rest] = argv;
-  const app = createApp(baseDir);
 
   if (!command || command === "help" || command === "--help" || command === "-h") {
     return help();
   }
+
+  const app = createApp(baseDir);
 
   if (command === "onboard") {
     return app.onboard(rest.join(" "));

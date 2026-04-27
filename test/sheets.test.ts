@@ -337,4 +337,35 @@ describe("sheets sync", () => {
       delete process.env.SNIPER_GOOGLE_SHEET_ID;
     }
   });
+
+  it("fills blank contact kinds with a usable fallback in the exported sheet", async () => {
+    const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
+    delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    const baseDir = makeTempDir();
+    const gateway = new FakeSheetGateway();
+    const { db } = openDatabase(baseDir);
+
+    db.exec(`
+      INSERT INTO companies (
+        canonical_key, name, domain, company_url, created_at, updated_at
+      ) VALUES (
+        'company:modaai', 'ModaAI', 'moda.ai', 'https://moda.ai', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, email, contact_kind, confidence, created_at, updated_at
+      ) VALUES (
+        'contact:modaai', 1, 'hello@moda.ai', '', 'high', datetime('now'), datetime('now')
+      );
+    `);
+
+    await syncSheets(baseDir, gateway);
+
+    expect((gateway.sheets.get("Contacts") ?? [])[0]?.kind).toBe("general_contact_email");
+
+    if (previousSheetId) {
+      process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;
+    } else {
+      delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    }
+  });
 });

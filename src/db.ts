@@ -645,7 +645,19 @@ export function upsertPageCache(
       fetch_status = excluded.fetch_status,
       used_browser_fallback = excluded.used_browser_fallback,
       updated_at = excluded.updated_at
-  `).run({ ...input, updated_at: nowIso() });
+  `).run({
+    normalized_url: input.normalizedUrl,
+    url: input.url,
+    domain: input.domain,
+    source_type: input.sourceType,
+    intent: input.intent,
+    page_type: input.pageType,
+    html: input.html,
+    text: input.text,
+    fetch_status: input.fetchStatus,
+    used_browser_fallback: input.usedBrowserFallback ? 1 : 0,
+    updated_at: nowIso(),
+  });
 }
 
 export function enqueueDiscoveryCandidates(db: Database.Database, candidates: DiscoveryCandidate[]): { queued: number; deduped: number } {

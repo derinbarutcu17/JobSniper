@@ -40,7 +40,10 @@ describe("discovery integration", () => {
           },
           sources: {
             rss: [{ name: "Sample Design Feed", url: "https://feed.example.com/rss" }],
-            atsBoards: []
+            atsBoards: [],
+            jobBoards: [
+              { name: "LinkedIn Design", provider: "linkedin", lane: "design_jobs", query: "product designer ux ui", location: "Berlin, Germany", maxResults: 5 },
+            ]
           },
           blacklist: {
             companies: [],
@@ -67,6 +70,19 @@ describe("discovery integration", () => {
       "https://jobs.example.com/turkish-design-role": { body: fixture("turkish-job.html") },
       "https://jobs.example.com/agent-engineer": { body: fixture("remote-ai-job.html") },
       "https://feed.example.com/rss": { body: fixture("sample-rss.xml") },
+      "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=product+designer+ux+ui&location=Berlin%2C+Germany&start=0&position=1&pageNum=0&count=5": {
+        body: `
+          <html><body>
+            <div class="base-search-card">
+              <a class="base-card__full-link" href="https://www.linkedin.com/jobs/view/22222222/?trackingId=x"></a>
+              <h3 class="base-search-card__title">Junior Product Designer</h3>
+              <h4 class="base-search-card__subtitle"><a href="https://www.linkedin.com/company/atlasmetrics/">Atlas Metrics</a></h4>
+              <span class="job-search-card__location">Berlin, Germany</span>
+              <div class="job-search-card__snippet">Hybrid design systems role for climate software.</div>
+            </div>
+          </body></html>
+        `,
+      },
     });
 
     const summary = await runDiscovery(baseDir, deps);
@@ -77,6 +93,7 @@ describe("discovery integration", () => {
     expect(summary.totalFound).toBeGreaterThan(1);
     expect(jobs.some((job) => job.title.includes("UI/UX"))).toBe(true);
     expect(jobs.some((job) => job.title.includes("Agent Engineer"))).toBe(true);
+    expect(jobs.some((job) => job.title.includes("Junior Product Designer"))).toBe(true);
     expect(contacts.some((contact) => contact.email === "hello@berlinstudio.com")).toBe(true);
   });
 });

@@ -229,6 +229,7 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       return [
         `Search providers: ${providers.map((provider) => provider.name).join(", ") || "none"}`,
         `ATS boards configured: ${config.sources.atsBoards.length}`,
+        `Job boards configured: ${config.sources.jobBoards.length}`,
         `RSS feeds configured: ${config.sources.rss.length}`,
         `Browser fallback: ${config.search.browserFallback ? "enabled" : "disabled"}`,
       ].join("\n");

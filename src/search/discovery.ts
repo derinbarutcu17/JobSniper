@@ -21,6 +21,7 @@ import type { CompanyRecordInput, ContactCandidate, Dependencies, DiscoveryCandi
 import { crawlUrl, discoverFromAtsBoard, expandSearchResult } from "./ats.js";
 import { classifyCandidate } from "./classify.js";
 import { gatherSearchCandidates } from "./frontier.js";
+import { buildJobBoardSourceBreakdownKey, discoverFromJobBoard } from "./job-boards.js";
 import { buildQueries } from "./queries.js";
 import { discoverFromRss } from "./rss.js";
 import { getSearchProviders } from "./web.js";
@@ -142,6 +143,23 @@ async function collectConfiguredListings(
     } catch {
       sourceBreakdownAccumulator(sourceBreakdown, "ats_failed", 1);
       context?.warnings.push(`ATS board failed: ${board.name}`);
+    }
+  }
+
+  for (const board of config.sources.jobBoards) {
+    if (options.companyWatchOnly) continue;
+    if (options.lane && board.lane !== options.lane) continue;
+    try {
+      const discovered = await withTimeout(
+        discoverFromJobBoard(board, deps, config),
+        config.search.timeoutMs,
+        `job-board:${board.name}`,
+      );
+      listings.push(...discovered);
+      sourceBreakdownAccumulator(sourceBreakdown, buildJobBoardSourceBreakdownKey(board.provider), discovered.length);
+    } catch {
+      sourceBreakdownAccumulator(sourceBreakdown, `${buildJobBoardSourceBreakdownKey(board.provider)}_failed`, 1);
+      context?.warnings.push(`Job-board source failed: ${board.name}`);
     }
   }
 

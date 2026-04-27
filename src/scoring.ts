@@ -36,7 +36,6 @@ const GLOBAL_MISMATCH_TERMS = [
   "kubernetes",
   "golang",
   "backend",
-  "machine learning intern",
 ];
 
 const CLOSED_ROLE_TERMS = [
@@ -119,15 +118,27 @@ function gateEligibility(config: SniperConfig, profile: ProfileSummary, listing:
     breakdown.gatesPassed.push("role_family_fit");
   }
 
+  if (listing.lane === "student_jobs") {
+    if (includesAny(description, ["full-time only", "full time only", "must be available full time", "40 hours", "5+ years", "4+ years", "senior"])) {
+      breakdown.negatives.push("Student lane penalty: the role looks full-time or senior-heavy.");
+      breakdown.seniorityFit -= 12;
+    }
+    if (includesAny(description, ["werkstudent", "working student", "intern", "internship", "student assistant", "part-time"])) {
+      breakdown.seniorityFit += 8;
+    }
+  }
+
+  const preferredPlaceSignals = profile.preferredLocations.filter((entry) => !/^remote$/i.test(entry));
   const matchesTargetLocation =
     includesAny(locationBlob, config.search.priorityCities) ||
-    includesAny(locationBlob, config.search.priorityCountries) ||
-    includesAny(locationBlob, profile.preferredLocations);
-  const isRemoteFriendly =
-    listing.workModel === "remote" ||
-    includesAny(locationBlob, ["remote"]) ||
-    includesAny(description, ["remote"]);
-  if (locationBlob && !matchesTargetLocation && !isRemoteFriendly) {
+    includesAny(locationBlob, preferredPlaceSignals);
+  const remoteOnly =
+    listing.workModel === "remote" &&
+    (/^\s*remote\s*$/i.test(listing.location) || listing.location.trim() === "");
+  const explicitForeignCountry =
+    Boolean(listing.country.trim()) &&
+    !includesAny(listing.country, ["germany", "deutschland"]);
+  if (!matchesTargetLocation && (explicitForeignCountry || !remoteOnly)) {
     breakdown.gatesFailed.push("location_outside_target");
     breakdown.negatives.push("Role is outside the configured target zone.");
   } else {

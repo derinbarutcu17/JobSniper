@@ -12,7 +12,7 @@ const profile: ProfileSummary = {
   targetSeniority: "junior",
   allowStretchRoles: false,
   avoidTitleTerms: ["senior", "lead", "manager", "director", "head", "principal", "staff"],
-  preferredLocations: ["Berlin", "Germany", "Remote"],
+  preferredLocations: ["Berlin", "Remote"],
   languagePreference: ["en", "de"],
   toolSignals: ["figma", "design systems", "typescript", "python", "agent"],
   summary: "Product-focused design and AI tooling profile.",
@@ -151,6 +151,35 @@ describe("scoring", () => {
     expect(scored.breakdown.gatesFailed).toContain("location_outside_target");
   });
 
+  it("excludes non-Berlin roles even if they are remote or in Germany", () => {
+    const config = loadConfig(makeTempDir());
+    const scoredRemote = scoreListing(
+      config,
+      profile,
+      listing({
+        location: "Remote",
+        country: "US",
+        workModel: "remote",
+        description: "Remote product design role in New York.",
+      }),
+    );
+    expect(scoredRemote.category).toBe("Excluded");
+    expect(scoredRemote.breakdown.gatesFailed).toContain("location_outside_target");
+
+    const scoredGermany = scoreListing(
+      config,
+      profile,
+      listing({
+        location: "Hamburg",
+        country: "Germany",
+        workModel: "hybrid",
+        description: "Hybrid product design role in Hamburg.",
+      }),
+    );
+    expect(scoredGermany.category).toBe("Excluded");
+    expect(scoredGermany.breakdown.gatesFailed).toContain("location_outside_target");
+  });
+
   it("supports custom role packs without code changes", () => {
     const baseDir = makeTempDir();
     fs.writeFileSync(
@@ -217,5 +246,42 @@ describe("scoring", () => {
     expect(scoreListing(config, profile, listing({ title: "Visual Designer" })).titleFamily).toBe("UI/UX Designer");
     expect(scoreListing(config, profile, listing({ lane: "ai_coding_jobs", title: "Agent Workflow Builder" })).titleFamily).toBe("Automation Engineer");
     expect(scoreListing(config, profile, listing({ title: "Design Systems Engineer" })).titleFamily).toBe("Design Engineer");
+  });
+
+  it("does not globally suppress internships when student lane is used", () => {
+    const config = loadConfig(makeTempDir());
+    const scored = scoreListing(
+      config,
+      profile,
+      listing({
+        lane: "student_jobs",
+        title: "Machine Learning Intern",
+        description: "Werkstudent / intern role in Berlin building applied AI workflows with Python.",
+      }),
+    );
+    expect(scored.category).not.toBe("Excluded");
+    expect(scored.breakdown.gatesFailed).not.toContain("role_family_mismatch");
+  });
+
+  it("penalizes student roles that are actually full-time senior-style roles", () => {
+    const config = loadConfig(makeTempDir());
+    const studentProfile: ProfileSummary = {
+      ...profile,
+      roleFamilies: ["student_jobs"],
+      targetSeniority: "intern",
+      avoidTitleTerms: ["senior", "lead", "manager"],
+      toolSignals: ["werkstudent", "internship", "figma"],
+    };
+    const scored = scoreListing(
+      config,
+      studentProfile,
+      listing({
+        lane: "student_jobs",
+        title: "Working Student Product Designer",
+        description: "Full-time only. 5+ years of experience required for this student role.",
+      }),
+    );
+    expect(scored.category).toBe("Excluded");
+    expect(scored.breakdown.negatives.some((entry) => entry.includes("Student lane penalty"))).toBe(true);
   });
 });

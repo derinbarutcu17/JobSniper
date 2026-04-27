@@ -11,7 +11,7 @@ export function buildQueries(config: SniperConfig, profile: ProfileSummary): Sea
   getEnabledRolePackIds(config).forEach((lane: LaneId) => {
     const laneTerms = collectQueryTerms(config, lane);
     const profileTerms = profile.toolSignals.slice(0, 4);
-    const locationTerms = [...config.search.priorityCities.slice(0, 1), ...config.search.priorityCountries.slice(0, 1)];
+    const locationTerms = [...config.search.priorityCities.slice(0, 1)];
     const companyWatch = isCompanyWatchLane(config, lane);
 
     const baseFamilies: Array<SearchQuery["family"]> = companyWatch ? ["company", "contact"] : ["job", "company", "contact"];

@@ -132,11 +132,11 @@ function sortContactsForCompany(companyDomain: string, contacts: ContactCandidat
 }
 
 function isStrongDirectEmail(companyDomain: string, contact: ContactCandidate): boolean {
-  return Boolean(contact.email) && scoreContactCandidate(companyDomain, contact) >= 48;
+  return Boolean(contact.email) && scoreContactCandidate(companyDomain, contact) >= 54;
 }
 
 function isUsableDirectEmail(companyDomain: string, contact: ContactCandidate): boolean {
-  return Boolean(contact.email) && scoreContactCandidate(companyDomain, contact) >= 32;
+  return Boolean(contact.email) && scoreContactCandidate(companyDomain, contact) >= 42;
 }
 
 function dedupeContacts(contacts: ContactCandidate[]): ContactCandidate[] {
@@ -368,7 +368,7 @@ function scoreFallbackPage(baseUrl: string, page: ReturnType<typeof buildPageRec
 export function resolveCompanyBestContact(company: CompanyRow): string {
   const publicContacts = parseJsonList(company.public_contacts);
   const companyDomain = normalizedCompanyDomain(String(company.domain ?? domainFromUrl(String(company.company_url ?? "")) ?? ""));
-  const directEmail = publicContacts
+  const strongDirectEmail = publicContacts
     .filter((entry) => isEmail(entry) && !isPlaceholderEmail(entry))
     .map((email) => ({
       email,
@@ -386,8 +386,9 @@ export function resolveCompanyBestContact(company: CompanyRow): string {
         pageType: "generic",
       }),
     }))
+    .filter(({ score }) => score >= 54)
     .sort((left, right) => right.score - left.score)[0]?.email;
-  if (directEmail) return directEmail;
+  if (strongDirectEmail) return strongDirectEmail;
 
   const prioritizedLinks = [
     String(company.contact_url ?? ""),

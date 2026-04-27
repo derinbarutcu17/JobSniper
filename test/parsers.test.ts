@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { discoverFromAtsBoard, expandSearchResult } from "../src/search/ats.js";
 import { canonicalJobKey } from "../src/lib/url.js";
+import { defaultConfig } from "../src/config.js";
 import { discoverFromRss } from "../src/search/rss.js";
 import { classifyCandidate, classifyPageType } from "../src/search/classify.js";
 import { buildPageRecord, extractContacts } from "../src/search/extract.js";
+import { discoverFromJobBoard } from "../src/search/job-boards.js";
 import { fixture, makeFetchStub } from "./helpers.js";
 
 describe("parsers", () => {
@@ -39,6 +41,55 @@ describe("parsers", () => {
     expect(listings[0]?.company).toBe("Berlin Studio");
     expect(listings[0]?.language).toBe("en");
     expect(listings[0]?.publicContacts.some((contact) => contact.email === "hello@berlinstudio.com")).toBe(true);
+  });
+
+  it("parses LinkedIn guest job cards into job-board listings", async () => {
+    const deps = makeFetchStub({
+      "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=product+designer+ux+ui&location=Berlin%2C+Germany&start=0&position=1&pageNum=0&count=3": {
+        body: `
+          <html><body>
+            <div class="base-search-card">
+              <a class="base-card__full-link" href="https://www.linkedin.com/jobs/view/1234567890/?trackingId=x"></a>
+              <h3 class="base-search-card__title">Product Designer</h3>
+              <h4 class="base-search-card__subtitle"><a href="https://www.linkedin.com/company/figma/">Figma</a></h4>
+              <span class="job-search-card__location">Berlin, Germany</span>
+              <time datetime="2026-04-26"></time>
+              <div class="job-search-card__snippet">Hybrid role focused on product design systems.</div>
+            </div>
+          </body></html>
+        `,
+      },
+    });
+    const listings = await discoverFromJobBoard(
+      { name: "LinkedIn Berlin Design", provider: "linkedin", lane: "design_jobs", query: "product designer ux ui", location: "Berlin, Germany", maxResults: 3 },
+      deps,
+      defaultConfig,
+    );
+    expect(listings).toHaveLength(1);
+    expect(listings[0]?.sourceType).toBe("job_board");
+    expect(listings[0]?.company).toBe("Figma");
+    expect(listings[0]?.isRealJobPage).toBe(true);
+  });
+
+  it("parses Google Jobs hidden payloads into job-board listings", async () => {
+    const deps = makeFetchStub({
+      "https://www.google.com/search?q=ai+engineer+llm+agent+jobs+near+Berlin&udm=8": {
+        body: `
+          <html><body>
+            "520084652":[["AI Engineer","Langdock","Berlin, Germany",[[ "https://jobs.langdock.com/ai-engineer" ]],null,null,null,null,null,null,null,null,"3 days ago",null,null,null,null,null,null,"Build agent workflows for enterprise users. Remote within Germany.",null,null,null,null,null,null,null,null,"go-1"]]}]]]]]
+          </body></html>
+        `,
+      },
+    });
+    const listings = await discoverFromJobBoard(
+      { name: "Google Jobs Berlin AI", provider: "google_jobs", lane: "ai_coding_jobs", query: "ai engineer llm agent", location: "Berlin", maxResults: 3 },
+      deps,
+      defaultConfig,
+    );
+    expect(listings).toHaveLength(1);
+    expect(listings[0]?.company).toBe("Langdock");
+    expect(listings[0]?.url).toBe("https://jobs.langdock.com/ai-engineer");
+    expect(listings[0]?.workModel).toBe("remote");
   });
 
   it("normalizes canonical job keys from tracking URLs", () => {
@@ -104,6 +155,25 @@ describe("parsers", () => {
         (contact) => Boolean(contact.email) && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(contact.email),
       ),
     ).toBe(false);
+  });
+
+  it("rejects asset-like text that merely looks email-ish", () => {
+    const page = buildPageRecord(
+      "https://example.com/contact",
+      `
+        <html><body>
+          <p>Asset mention: hero-support@2x.png</p>
+          <p>Preview: no-reply@company.org should not win.</p>
+          <p>Real contact: hiring@example.org</p>
+        </body></html>
+      `,
+      "test",
+      "page",
+    );
+    const contacts = extractContacts(page);
+    expect(contacts.some((contact) => contact.email === "hiring@example.org")).toBe(true);
+    expect(contacts.some((contact) => contact.email === "no-reply@company.org")).toBe(false);
+    expect(contacts.some((contact) => contact.email === "hero-support@2x.png")).toBe(false);
   });
 
   it("falls back to search results when Wellfound board is blocked by a challenge page", async () => {

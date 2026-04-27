@@ -10,7 +10,7 @@
     "retries": 2,
     "timeoutMs": 10000,
     "priorityCities": ["Berlin"],
-    "priorityCountries": ["Germany", "Deutschland"],
+    "priorityCountries": ["Berlin"],
     "remoteScopes": ["remote", "hybrid"]
   },
   "lanes": {
@@ -81,6 +81,74 @@
       "startupTerms": ["seed", "series a", "founding", "small team", "0-1"],
       "companyTerms": ["startup", "builder", "developer tools"]
     },
+    "student_jobs": {
+      "label": "Student & Working Student Jobs",
+      "type": "job",
+      "enabled": true,
+      "queries": {
+        "tr": [],
+        "en": [
+          "Berlin werkstudent jobs",
+          "Berlin working student jobs",
+          "Berlin internship jobs",
+          "Berlin praktikum jobs",
+          "Berlin student assistant jobs",
+          "Berlin part-time student jobs"
+        ]
+      },
+      "keywords": [
+        "werkstudent",
+        "working student",
+        "student assistant",
+        "intern",
+        "internship",
+        "praktikum",
+        "part-time student",
+        "junior",
+        "entry-level",
+        "trainee"
+      ],
+      "queryTerms": [
+        "werkstudent",
+        "working student",
+        "student assistant",
+        "internship",
+        "praktikum",
+        "student jobs",
+        "werkstudent product design",
+        "working student frontend",
+        "working student ai",
+        "student assistant product",
+        "intern product design",
+        "intern software engineer"
+      ],
+      "profileSignals": [
+        "werkstudent",
+        "working student",
+        "student assistant",
+        "internship",
+        "figma",
+        "product design",
+        "ux",
+        "react",
+        "typescript",
+        "ai",
+        "automation"
+      ],
+      "titleFamilies": [
+        { "family": "Working Student", "terms": ["werkstudent", "working student", "student assistant", "part-time student"] },
+        { "family": "Intern", "terms": ["intern", "internship", "praktikum", "trainee"] },
+        { "family": "Product Designer", "terms": ["product designer", "product design", "ürün tasarımcısı"] },
+        { "family": "UI/UX Designer", "terms": ["ui/ux designer", "ux designer", "ui designer", "ux", "ui"] },
+        { "family": "Design Engineer", "terms": ["design engineer", "creative technologist"] },
+        { "family": "Frontend Engineer", "terms": ["frontend engineer", "front-end engineer", "react developer"] },
+        { "family": "AI Engineer", "terms": ["ai engineer", "ml engineer", "llm engineer"] },
+        { "family": "Automation Engineer", "terms": ["automation engineer", "agent engineer"] }
+      ],
+      "mismatchTerms": ["sales manager", "account executive", "business development", "commission-only", "call center", "full-time only", "senior"],
+      "startupTerms": ["seed", "series a", "founding", "small team", "0-1"],
+      "companyTerms": ["startup", "studio", "builder", "career", "hiring", "team"]
+    },
     "company_watch": {
       "label": "Company Watch",
       "type": "company_watch",
@@ -88,15 +156,19 @@
       "queries": {
         "tr": [],
         "en": [
-          "Berlin AI startup careers",
-          "Germany product design startup team",
-          "creative AI startup Berlin careers"
+          "site:directory.startupberlin.co Berlin startups",
+          "site:ai.berlin/ecosystem/directory Berlin startups",
+          "site:berlin.startups-list.com Berlin startups",
+          "site:startup-ecosystem.org/berlin Berlin startups",
+          "site:handpickedberlin.com Berlin funded startups",
+          "site:seedtable.com/startups-berlin Berlin startups",
+          "site:startupberlin.co Berlin startups"
         ]
       },
-      "keywords": ["careers", "jobs", "hiring", "team", "startup", "founding", "series a", "seed"],
-      "queryTerms": ["AI startup", "product design startup", "creative AI company"],
-      "profileSignals": ["careers", "hiring", "team", "startup", "founding"],
-      "companyTerms": ["startup", "studio", "builder", "careers", "hiring", "team"],
+      "keywords": ["careers", "jobs", "hiring", "team", "startup", "founding", "series a", "seed", "Berlin"],
+      "queryTerms": ["Berlin startup", "Berlin company", "Berlin founders"],
+      "profileSignals": ["careers", "hiring", "team", "startup", "founding", "Berlin"],
+      "companyTerms": ["startup", "studio", "builder", "careers", "hiring", "team", "Berlin"],
       "startupTerms": ["seed", "series a", "founding", "small team", "0-1"]
     }
   },
@@ -129,6 +201,56 @@
         "provider": "wellfound",
         "url": "https://wellfound.com/location/berlin-berlin",
         "lane": "ai_coding_jobs"
+      },
+      {
+        "name": "Wellfound Berlin Student Jobs",
+        "provider": "wellfound",
+        "url": "https://wellfound.com/location/berlin-berlin",
+        "lane": "student_jobs"
+      }
+    ],
+    "jobBoards": [
+      {
+        "name": "LinkedIn Berlin Design",
+        "provider": "linkedin",
+        "lane": "design_jobs",
+        "location": "Berlin, Germany",
+        "maxResults": 25
+      },
+      {
+        "name": "LinkedIn Berlin AI",
+        "provider": "linkedin",
+        "lane": "ai_coding_jobs",
+        "location": "Berlin, Germany",
+        "maxResults": 25
+      },
+      {
+        "name": "LinkedIn Berlin Student",
+        "provider": "linkedin",
+        "lane": "student_jobs",
+        "location": "Berlin, Germany",
+        "maxResults": 25
+      },
+      {
+        "name": "Google Jobs Berlin Design",
+        "provider": "google_jobs",
+        "lane": "design_jobs",
+        "location": "Berlin",
+        "maxResults": 10
+      },
+      {
+        "name": "Google Jobs Berlin AI",
+        "provider": "google_jobs",
+        "lane": "ai_coding_jobs",
+        "location": "Berlin",
+        "maxResults": 10
+      },
+      {
+        "name": "Google Jobs Berlin Student",
+        "provider": "google_jobs",
+        "lane": "student_jobs",
+        "location": "Berlin",
+        "maxResults": 10
       }
     ]
   },
@@ -148,6 +270,7 @@
     "lanes": {
       "design_jobs": [],
       "ai_coding_jobs": [],
+      "student_jobs": [],
       "company_watch": []
     }
   },

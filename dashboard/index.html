@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Job Sniper Dashboard</title>
+    <link rel="stylesheet" href="./assets/styles.css">
+  </head>
+  <body data-page="overview">
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <h1>Job Sniper</h1>
+          <p>Private job operations dashboard. Local DB is canonical. Sheets and this web UI are mirrors of that state.</p>
+        </div>
+        <div class="meta" data-sync-meta></div>
+      </header>
+
+      <nav class="nav">
+        <a class="active" href="./index.html">Overview</a>
+        <a href="./companies.html">Companies</a>
+        <a href="./jobs.html">Active Jobs</a>
+        <a href="./outreach.html">Sent</a>
+        <a href="./pipeline.html">Pipeline</a>
+      </nav>
+
+      <section class="hero">
+        <div class="hero-grid">
+          <div>
+            <h2>One operating view</h2>
+            <p>The goal here is simple: companies, jobs, sent outreach, and pipeline state all come from the same exported snapshot. No more treating Sheets as the product.</p>
+          </div>
+          <div class="panel">
+            <h3>Sync rule</h3>
+            <p>Local SQLite stays canonical. GitHub repo stores the same snapshot. Sheets and dashboard are generated mirrors, not manual editing surfaces.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="stats-grid" data-stats></section>
+      <section data-overview></section>
+      <section data-error></section>
+      <p class="footer-note">If something looks wrong here, the fix should happen in the local DB or the export logic, not by patching the web page manually.</p>
+    </main>
+    <script type="module" src="./assets/app.js"></script>
+  </body>
+  </html>
