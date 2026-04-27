@@ -32,6 +32,11 @@ Current foundation:
 - role-pack-driven search and scoring
 - adapter-style Google Sheets sync
 - CLI and OpenClaw/AI Agent skill as presentation layers over the engine
+- explicit module split:
+  - `src/ingestion`
+  - `src/normalization`
+  - `src/state`
+  - `src/presentation`
 
 That means the repo is no longer “just a CLI tool.” It is a local domain engine that can later power:
 
@@ -66,6 +71,8 @@ without needing to untangle the core logic again.
 - Builds company dossiers
 - Logs outreach attempts and outcomes
 - Syncs live state into Google Sheets and pulls manual edits back
+
+Sheets pull is intentionally opt-in. SQLite remains the canonical writable state unless you explicitly enable reverse sync with `SNIPER_ENABLE_SHEET_PULL=1`.
 
 ## Talk to It
 

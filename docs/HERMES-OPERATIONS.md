@@ -1,4 +1,4 @@
-# Hermes Operations Guide for Combined Job Sniper
+# Hermes Operations Guide for Job Sniper
 
 ## Purpose
 
@@ -24,8 +24,6 @@ Use the repo that contains this file. The cron wrapper is now path-relative, so 
 Repo root:
 
 - the parent directory of `scripts/hermes-daily-run.sh`
-
-Hermes should run the V2 repo only after the merge checklist in `docs/COMBINE-V1-V2-PLAN.md` is complete.
 
 ## Hermes-local paths
 
@@ -109,7 +107,7 @@ Confirm:
 
 This is the best default daily run order for Hermes.
 
-### Step 1. Pull manual state from Sheets
+### Step 1. Pull manual state from Sheets if explicitly enabled
 
 ```bash
 npm run sniper -- sheet pull
@@ -121,6 +119,12 @@ Why:
 - preserve priority notes
 - preserve manual contact overrides
 - avoid overwriting yesterday’s decisions
+
+Important:
+
+- `sheet pull` is intentionally disabled by default
+- enable it only when you want Sheets to feed manual edits back into SQLite
+- use `SNIPER_ENABLE_SHEET_PULL=1` for that mode
 
 ### Step 2. Run discovery
 
@@ -162,6 +166,17 @@ npm run sniper -- sheet sync
 
 This should be the last normal step, so the sheet reflects the latest decisions and metrics.
 
+### Step 5. Refresh the live dashboard snapshot
+
+```bash
+npm run live:sync
+```
+
+Use:
+
+- `npm run live:sync` to refresh the private live repo from SQLite-derived dashboard data
+- `npm run live:deploy` to refresh and publish to Vercel production
+
 ## Best cron strategy
 
 ### Recommended schedule
@@ -201,10 +216,11 @@ The wrapper should:
 1. `cd` into the repo root
 2. source environment variables
 3. ensure `data/reports/` exists
-4. run `sheet pull`
+4. optionally run `sheet pull` only when explicitly enabled
 5. run `run`
 6. save `triage`, `companies`, and `stats` outputs to dated local files
 7. run `sheet sync`
+8. run `live:sync`
 8. exit nonzero on failure
 
 This is better than putting the raw commands directly in crontab because:

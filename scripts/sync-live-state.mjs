@@ -22,13 +22,37 @@ function ensureLinkedLiveDir() {
   if (!fs.existsSync(liveDir)) {
     throw new Error(`Live dashboard directory not found: ${liveDir}`);
   }
+  if (!fs.existsSync(path.join(liveDir, ".git"))) {
+    throw new Error(`Live dashboard directory is not a standalone git checkout: ${liveDir}`);
+  }
   if (!fs.existsSync(path.join(liveDir, "index.html"))) {
     throw new Error(`Live dashboard directory is missing index.html: ${liveDir}`);
   }
 }
 
 function syncDashboardFiles() {
-  run("rsync", ["-a", "--delete", `${path.join(baseDir, "dashboard")}/`, `${liveDir}/`], baseDir);
+  run(
+    "rsync",
+    [
+      "-a",
+      "--delete",
+      "--exclude",
+      ".git/",
+      "--exclude",
+      ".vercel/",
+      "--exclude",
+      ".github/",
+      "--exclude",
+      ".gitignore",
+      "--exclude",
+      "README.md",
+      "--exclude",
+      "DEPLOYMENT.md",
+      `${path.join(baseDir, "dashboard")}/`,
+      `${liveDir}/`,
+    ],
+    baseDir,
+  );
 }
 
 function deployIfRequested() {
