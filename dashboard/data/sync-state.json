@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-04-27T19:08:23.737Z",
-  "dbHash": "a6cd64fa35f6d6128ab62cf0ca3ec0e67286a18a859f1fad3b6077b317f18e90",
-  "snapshotHash": "e103667ac34fedda59bc3373ac9d7ed9eba1dfe536c72baf1d904d0767a1c723",
+  "generatedAt": "2026-04-27T20:33:31.354Z",
+  "dbHash": "fa1437dc4d5414f5994a8ffcc1a81377e7be0a2852654b519642ea541494332f",
+  "snapshotHash": "7e37a1365036a8fcf6279e023ab19962553909d763b03bb4666a8a2d99dd129d",
   "summary": {
     "companies": 77,
     "directContacts": 28,
     "activeJobs": 1,
     "reached": 0,
     "sentEmails": 3,
-    "applications": 1,
+    "applications": 0,
     "talking": 0,
-    "rejected": 0,
-    "applied": 1,
+    "rejected": 1,
+    "applied": 0,
     "contacted": 3
   }
 }
