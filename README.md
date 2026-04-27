@@ -15,6 +15,7 @@ The project stays deterministic-first and inspectable:
 - SQLite is the local source of truth
 - discovery, scoring, route, and pitch logic are explicit
 - Google Sheets is an integration layer, not the primary database
+- the live web UI is a projection of exported DB state, not a second database
 - no auto-emailing
 - no auto-applying
 - no black-box “copilot” behavior
@@ -98,6 +99,7 @@ npm install
 npm run typecheck
 npm test
 npm run sniper -- help
+npm run live:sync
 ```
 
 Basic flow:
@@ -243,6 +245,33 @@ This closes the loop so the system can surface which routes and themes are actua
 ```
 
 Use Sheets as the operational board if you want browser-based review and editing without changing git.
+
+## Live Dashboard Sync
+
+The live dashboard is not a separate source of truth. It is an exported projection of the local SQLite state.
+
+Use:
+
+```bash
+npm run live:sync
+```
+
+This will:
+
+- export the latest dashboard snapshot from SQLite
+- refresh the local `jobsniper-live` folder
+
+If the live folder is already linked to Vercel, you can also deploy immediately:
+
+```bash
+npm run live:deploy
+```
+
+This will:
+
+- export the latest dashboard snapshot
+- refresh the local `jobsniper-live` folder
+- deploy the updated snapshot to Vercel production
 
 ## Role Packs and Customization
 
