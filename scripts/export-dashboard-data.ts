@@ -284,6 +284,16 @@ function ensureDir(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+function outreachDedupKey(item: OutreachItem): string {
+  return [
+    item.type,
+    safeString(item.companyName).trim().toLowerCase(),
+    safeString(item.jobTitle).trim().toLowerCase(),
+    safeString(item.route).trim().toLowerCase(),
+    safeString(item.status).trim().toLowerCase(),
+  ].join("::");
+}
+
 function main() {
   const baseDir = path.resolve(process.cwd());
   const { db } = openDatabase(baseDir);
@@ -385,7 +395,7 @@ function main() {
 
   const activeJobs = jobViews.filter((job) => !["discard"].includes(job.category) && !["applied", "rejected", "archived"].includes(job.pipelineStatus));
 
-  const outreach: OutreachItem[] = [
+  const outreach = [
     ...contactLogs.map((log) => ({
       type: "email" as const,
       companyName: safeString(log.company_name),
@@ -409,7 +419,16 @@ function main() {
         timestamp: safeString(app.submitted_at || app.created_at),
       };
     }),
-  ].sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+  ]
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+    .reduce<OutreachItem[]>((items, item) => {
+      const key = outreachDedupKey(item);
+      if (items.some((existing) => outreachDedupKey(existing) === key)) {
+        return items;
+      }
+      items.push(item);
+      return items;
+    }, []);
 
   const pipeline: PipelineItem[] = jobs
     .map((job) => {
