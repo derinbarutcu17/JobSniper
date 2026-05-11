@@ -36,6 +36,7 @@ function help(): string {
     "  experiments",
     "  requeue <url> [lane]",
     "  sources test",
+    "  source tomorrow [--output <path>] [--json <path>]",
     "  stats",
     "  export json [path]",
   ].join("\n");
@@ -317,6 +318,22 @@ export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<st
 
   if (command === "sources" && rest[0] === "test") {
     return app.sourcesTest();
+  }
+
+  if (command === "source" && rest[0] === "tomorrow") {
+    let outputPath: string | undefined;
+    let jsonPath: string | undefined;
+    for (let index = 1; index < rest.length; index += 1) {
+      const token = rest[index];
+      if (token === "--output") {
+        outputPath = rest[index + 1];
+        index += 1;
+      } else if (token === "--json") {
+        jsonPath = rest[index + 1];
+        index += 1;
+      }
+    }
+    return app.sourceTomorrow({ outputPath, jsonPath });
   }
 
   if (command === "stats") {

@@ -22,7 +22,7 @@ import { buildPageRecord, extractContacts } from "../ingestion/search/extract.js
 import { getSearchProviders } from "../ingestion/search/web.js";
 import type { SheetGateway } from "../state/sheets.js";
 import type { Dependencies, SearchLane } from "../types.js";
-import { presentCompanies, presentContacts, presentDossier, presentJobDetail, presentJobList, presentPipelineResult, presentRunResult, presentStats, presentTriage } from "./presenters.js";
+import { presentCompanies, presentContacts, presentDossier, presentJobDetail, presentJobList, presentPipelineResult, presentRunResult, presentStats, presentTomorrowSourcing, presentTriage } from "./presenters.js";
 import { createCompaniesService } from "../state/services/companies-service.js";
 import { createContactsService } from "../state/services/contacts-service.js";
 import { createJobsService } from "../state/services/jobs-service.js";
@@ -32,6 +32,7 @@ import { createRunService } from "../state/services/run-service.js";
 import { createSheetSyncService } from "../state/services/sheet-sync-service.js";
 import { createStatsService } from "../state/services/stats-service.js";
 import { createOutreachStatusService } from "../state/services/outreach-status-service.js";
+import { createTomorrowSourcingService } from "../state/services/tomorrow-sourcing-service.js";
 
 export interface AppDependencies {
   deps?: Dependencies;
@@ -74,6 +75,7 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
   const sheetSyncService = createSheetSyncService(baseDir, sheetGateway);
   const statsService = createStatsService(baseDir);
   const outreachStatusService = createOutreachStatusService(baseDir);
+  const tomorrowSourcingService = createTomorrowSourcingService(baseDir);
 
   return {
     async onboard(input: string) {
@@ -244,6 +246,10 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
 
     stats() {
       return presentStats(statsService.get());
+    },
+
+    async sourceTomorrow(options: { outputPath?: string; jsonPath?: string } = {}) {
+      return presentTomorrowSourcing(await tomorrowSourcingService.run(options));
     },
 
     exportJson(outputPath?: string) {

@@ -1,4 +1,4 @@
-import type { CompanyDossierView, CompanySummary, ContactSummary, JobDetail, JobSummary, PipelineResult, RunResult, StatsSnapshot, TriageItem } from "../types.js";
+import type { CompanyDossierView, CompanySummary, ContactSummary, JobDetail, JobSummary, PipelineResult, RunResult, StatsSnapshot, TomorrowSourcingResult, TriageItem } from "../types.js";
 
 export function presentRunResult(result: RunResult): string {
   const warningLine = result.summary.warnings?.length ? `Warnings: ${result.summary.warnings.join(" | ")}` : "";
@@ -112,4 +112,28 @@ export function presentPipelineResult(result: PipelineResult): string {
     `Recommendation: ${result.job.recommendation} | Route: ${result.job.recommendedRoute}`,
     assetLine,
   ].join("\n");
+}
+
+export function presentTomorrowSourcing(result: TomorrowSourcingResult): string {
+  const lines: string[] = [];
+  lines.push(`Tomorrow sourcing ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
+  lines.push(`Gmail audit: ${result.report.gmailAudit.available ? "available" : `fallback (${result.report.gmailAudit.reason})`}`);
+  if (result.outputPath) lines.push(`Report: ${result.outputPath}`);
+  if (result.jsonPath) lines.push(`JSON: ${result.jsonPath}`);
+  lines.push("");
+  lines.push("Top 5 Applications:");
+  for (const item of result.report.topApplications) {
+    lines.push(`- ${item.company} | ${item.role} | ${item.urgency} | ${item.confidence} | ${item.applicationLink}`);
+  }
+  lines.push("");
+  lines.push("Top 5 Berlin Startups to Email:");
+  for (const item of result.report.topOutreachCompanies) {
+    lines.push(`- ${item.company} | ${item.contactRoute} | ${item.contactConfidence} | ${item.whoToAddress}`);
+  }
+  lines.push("");
+  lines.push("Excluded Because Already Contacted:");
+  for (const item of result.report.excludedAlreadyContacted.slice(0, 10)) {
+    lines.push(`- ${item.company} | ${item.reason}`);
+  }
+  return lines.join("\n");
 }

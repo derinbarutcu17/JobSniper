@@ -753,3 +753,89 @@ export interface SearchProvider {
   name: string;
   search(query: SearchQuery, deps: Dependencies): Promise<SearchResult[]>;
 }
+
+export type TomorrowSourcingUrgency = "high" | "medium" | "low";
+
+export interface TomorrowProfileSignals {
+  summary: string;
+  toolSignals: string[];
+  preferredLocations: string[];
+  targetSeniority: string;
+}
+
+export interface TomorrowSourcingEvidence {
+  label: string;
+  value: string;
+}
+
+export interface TomorrowSourcingCandidateContact {
+  kind: string;
+  value: string;
+}
+
+export interface TomorrowApplicationTarget {
+  company: string;
+  role: string;
+  whyItFits: string;
+  applicationLink: string;
+  urgency: TomorrowSourcingUrgency;
+  confidence: "high" | "medium" | "low";
+  whyItBeatAlternatives: string;
+  source: string;
+  score: number;
+  evidence: TomorrowSourcingEvidence[];
+  nextAction: string;
+}
+
+export interface TomorrowCompanyOutreachTarget {
+  company: string;
+  whyItFits: string;
+  contactRoute: string;
+  whoToAddress: string;
+  contactConfidence: "high" | "medium" | "low";
+  whyItIsFresh: string;
+  nextAction: string;
+  score: number;
+  evidence: TomorrowSourcingEvidence[];
+}
+
+export interface TomorrowExclusionRecord {
+  company: string;
+  reason: string;
+  evidence?: TomorrowSourcingEvidence[];
+}
+
+export interface TomorrowSourcingGmailMatch {
+  company: string;
+  matchedValue: string;
+  confidence: "high" | "medium" | "low";
+  timestamp: string;
+  source: string;
+}
+
+export interface TomorrowSourcingReport {
+  generatedAt: string;
+  gmailAudit: {
+    available: boolean;
+    reason: string;
+    matches: TomorrowSourcingGmailMatch[];
+  };
+  topApplications: TomorrowApplicationTarget[];
+  reserveApplications: TomorrowApplicationTarget[];
+  topOutreachCompanies: TomorrowCompanyOutreachTarget[];
+  reserveOutreachCompanies: TomorrowCompanyOutreachTarget[];
+  excludedAlreadyContacted: TomorrowExclusionRecord[];
+  excludedNotGoodEnough: TomorrowExclusionRecord[];
+}
+
+export interface TomorrowSourcingResult {
+  report: TomorrowSourcingReport;
+  outputPath?: string;
+  jsonPath?: string;
+  text?: string;
+}
+
+export interface TomorrowSourcingOptions {
+  outputPath?: string;
+  jsonPath?: string;
+}
