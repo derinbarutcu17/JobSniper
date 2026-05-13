@@ -129,6 +129,17 @@ export interface SniperConfig {
       dailyJobsPrefix?: string;
     };
   };
+  tomorrow: {
+    ashbyQueries: string[];
+    searchQueries: string[];
+    curatedCompanies: TomorrowCuratedCompany[];
+  };
+}
+
+export interface TomorrowCuratedCompany {
+  company: string;
+  query: string;
+  roleHint: string;
 }
 
 export interface ProfileSummary {
@@ -790,6 +801,7 @@ export interface TomorrowApplicationTarget {
 export interface TomorrowCompanyOutreachTarget {
   company: string;
   whyItFits: string;
+  targetType?: string;
   contactRoute: string;
   whoToAddress: string;
   contactConfidence: "high" | "medium" | "low";
@@ -832,10 +844,12 @@ export interface TomorrowSourcingResult {
   report: TomorrowSourcingReport;
   outputPath?: string;
   jsonPath?: string;
+  pdfPath?: string;
   text?: string;
 }
 
 export interface TomorrowSourcingOptions {
   outputPath?: string;
   jsonPath?: string;
+  pdfPath?: string;
 }

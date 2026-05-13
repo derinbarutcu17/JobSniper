@@ -116,23 +116,41 @@ export function presentPipelineResult(result: PipelineResult): string {
 
 export function presentTomorrowSourcing(result: TomorrowSourcingResult): string {
   const lines: string[] = [];
-  lines.push(`Tomorrow sourcing ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
+  lines.push(`Tomorrow sourcing report-only run ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
   lines.push(`Gmail audit: ${result.report.gmailAudit.available ? "available" : `fallback (${result.report.gmailAudit.reason})`}`);
-  if (result.outputPath) lines.push(`Report: ${result.outputPath}`);
-  if (result.jsonPath) lines.push(`JSON: ${result.jsonPath}`);
   lines.push("");
   lines.push("Top 5 Applications:");
   for (const item of result.report.topApplications) {
     lines.push(`- ${item.company} | ${item.role} | ${item.urgency} | ${item.confidence} | ${item.applicationLink}`);
+    lines.push(`  Why it fits: ${item.whyItFits}`);
+    lines.push(`  Next action tomorrow: ${item.nextAction}`);
   }
   lines.push("");
   lines.push("Top 5 Berlin Startups to Email:");
   for (const item of result.report.topOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.contactRoute} | ${item.contactConfidence} | ${item.whoToAddress}`);
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
+    lines.push(`  Why it fits: ${item.whyItFits}`);
+    lines.push(`  Freshness: ${item.whyItIsFresh}`);
+    lines.push(`  Next action tomorrow: ${item.nextAction}`);
+  }
+  lines.push("");
+  lines.push("Reserve Applications:");
+  for (const item of result.report.reserveApplications) {
+    lines.push(`- ${item.company} | ${item.role} | ${item.urgency} | ${item.confidence} | ${item.applicationLink}`);
+  }
+  lines.push("");
+  lines.push("Reserve Startups:");
+  for (const item of result.report.reserveOutreachCompanies) {
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
   }
   lines.push("");
   lines.push("Excluded Because Already Contacted:");
   for (const item of result.report.excludedAlreadyContacted.slice(0, 10)) {
+    lines.push(`- ${item.company} | ${item.reason}`);
+  }
+  lines.push("");
+  lines.push("Excluded Because Not Good Enough:");
+  for (const item of result.report.excludedNotGoodEnough.slice(0, 10)) {
     lines.push(`- ${item.company} | ${item.reason}`);
   }
   return lines.join("\n");

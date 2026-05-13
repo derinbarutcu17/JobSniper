@@ -3,7 +3,7 @@ import path from "node:path";
 import { SniperError } from "../errors.js";
 import { ensureDir } from "../lib/paths.js";
 import { builtInRolePacks } from "./role-packs.js";
-import type { LaneConfig, LaneId, SniperConfig } from "../types.js";
+import type { LaneConfig, LaneId, SniperConfig, TomorrowCuratedCompany } from "../types.js";
 
 type ConfigOverrides = Omit<Partial<SniperConfig>, "lanes"> & {
   lanes?: Record<LaneId, Partial<LaneConfig>>;
@@ -63,6 +63,29 @@ export const defaultConfig: SniperConfig = {
       runMetrics: "RunMetrics",
       dailyJobsPrefix: "Jobs ",
     },
+  },
+  tomorrow: {
+    ashbyQueries: [
+      'site:jobs.ashbyhq.com Berlin "Product Designer"',
+      'site:jobs.ashbyhq.com Berlin "Design Engineer"',
+      'site:jobs.ashbyhq.com Berlin "Product Engineer"',
+      'site:jobs.ashbyhq.com Berlin "Frontend Engineer"',
+      'site:jobs.ashbyhq.com Berlin "Full Stack"',
+    ],
+    searchQueries: [
+      '"Berlin" "Design Engineer" job',
+      '"Berlin" "AI Product Engineer" job',
+      '"Berlin" "Frontend & Design Engineer"',
+      '"Berlin" "Product Engineer" startup',
+      '"Berlin" "Product Designer" startup',
+    ],
+    curatedCompanies: [
+      { company: "Langdock", query: "Langdock Design Engineer Berlin", roleHint: "Design Engineer" },
+      { company: "Kombo", query: "Kombo AI Product Engineer Berlin", roleHint: "AI Product Engineer" },
+      { company: "&why", query: "&why Frontend Design Engineer Berlin", roleHint: "Frontend & Design Engineer" },
+      { company: "Ecosia", query: "Ecosia Product Designer Berlin jobs", roleHint: "Product Designer" },
+      { company: "Bliq", query: "Bliq Product Designer Berlin startup jobs", roleHint: "Product Designer" },
+    ],
   },
 };
 
@@ -129,6 +152,11 @@ function mergeConfig(base: SniperConfig, overrides: ConfigOverrides): SniperConf
       ...(overrides.sheets ?? {}),
       tabs: { ...base.sheets.tabs, ...(overrides.sheets?.tabs ?? {}) },
     },
+    tomorrow: {
+      ashbyQueries: overrides.tomorrow?.ashbyQueries ?? base.tomorrow.ashbyQueries,
+      searchQueries: overrides.tomorrow?.searchQueries ?? base.tomorrow.searchQueries,
+      curatedCompanies: overrides.tomorrow?.curatedCompanies ?? base.tomorrow.curatedCompanies,
+    },
   };
 }
 
@@ -164,6 +192,12 @@ function sanitizeConfig(config: SniperConfig): SniperConfig {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isCuratedCompany(value: unknown): value is TomorrowCuratedCompany {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.company === "string" && typeof entry.query === "string" && typeof entry.roleHint === "string";
 }
 
 function validateLaneConfig(laneId: string, lane: LaneConfig): void {
@@ -232,6 +266,13 @@ function validateConfig(config: SniperConfig): SniperConfig {
 
   if (!config.sheets.tabs.jobs || !config.sheets.tabs.companies || !config.sheets.tabs.contacts || !config.sheets.tabs.runMetrics) {
     throw new SniperError("Sheets tabs must define jobs, companies, contacts, and runMetrics titles.", "config_error");
+  }
+
+  if (!isStringArray(config.tomorrow.ashbyQueries) || !isStringArray(config.tomorrow.searchQueries)) {
+    throw new SniperError("tomorrow.ashbyQueries and tomorrow.searchQueries must be string arrays.", "config_error");
+  }
+  if (!Array.isArray(config.tomorrow.curatedCompanies) || !config.tomorrow.curatedCompanies.every(isCuratedCompany)) {
+    throw new SniperError("tomorrow.curatedCompanies must be an array of { company, query, roleHint } strings.", "config_error");
   }
 
   for (const board of config.sources.atsBoards) {

@@ -248,7 +248,7 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       return presentStats(statsService.get());
     },
 
-    async sourceTomorrow(options: { outputPath?: string; jsonPath?: string } = {}) {
+    async sourceTomorrow(options: { outputPath?: string; jsonPath?: string; pdfPath?: string } = {}) {
       return presentTomorrowSourcing(await tomorrowSourcingService.run(options));
     },
 

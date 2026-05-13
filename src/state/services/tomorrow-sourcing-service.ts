@@ -28,6 +28,7 @@ import type {
   CompanyOutreachSnapshot,
   TomorrowApplicationTarget,
   TomorrowCompanyOutreachTarget,
+  TomorrowCuratedCompany,
   TomorrowExclusionRecord,
   TomorrowProfileSignals,
   TomorrowSourcingEvidence,
@@ -64,6 +65,13 @@ type GmailAudit = {
   available: boolean;
   reason: string;
   matches: TomorrowSourcingGmailMatch[];
+};
+
+type GmailSearchTarget = {
+  company: string;
+  value: string;
+  confidence: "high" | "medium" | "low";
+  source: string;
 };
 
 function safeString(value: unknown): string {
@@ -259,12 +267,109 @@ function loadProfile(baseDir: string): TomorrowProfileSignals {
 }
 
 function loadSeedCompanies(baseDir: string): Set<string> {
-  const seedPath = path.join(baseDir, "data", "contacted-company-seed.json");
-  const data = readJsonFile<ContactSeedFile>(seedPath, { companies: [] });
-  return new Set((data.companies || []).map((entry) => normalizeCompanyToken(entry)));
+  return new Set(loadSeedCompanyValues(baseDir).map((entry) => normalizeCompanyToken(entry)));
 }
 
-async function auditGmailSent(companies: string[]): Promise<GmailAudit> {
+function loadSeedCompanyValues(baseDir: string): string[] {
+  const seedPath = path.join(baseDir, "data", "contacted-company-seed.json");
+  const data = readJsonFile<ContactSeedFile>(seedPath, { companies: [] });
+  return (data.companies || []).map((entry) => safeString(entry).trim()).filter((entry) => entry.length > 0);
+}
+
+function confidenceWeight(value: "high" | "medium" | "low"): number {
+  return value === "high" ? 3 : value === "medium" ? 2 : 1;
+}
+
+function normalizeSearchTargetValue(value: string): string {
+  return value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/[\\"]/g, "")
+    .replace(/\/.*$/, "")
+    .trim();
+}
+
+function addSearchTarget(targets: Map<string, GmailSearchTarget>, target: GmailSearchTarget): void {
+  const normalized = normalizeCompanyToken(target.value) || normalizeSearchTargetValue(target.value).toLowerCase();
+  if (!normalized) return;
+  const existing = targets.get(normalized);
+  if (!existing || confidenceWeight(target.confidence) > confidenceWeight(existing.confidence)) {
+    targets.set(normalized, { ...target, value: normalizeSearchTargetValue(target.value) });
+  }
+}
+
+export function buildGmailSearchTargets(baseDir: string): GmailSearchTarget[] {
+  const { db } = openDatabase(baseDir);
+  const targets = new Map<string, GmailSearchTarget>();
+  const seedCompanies = loadSeedCompanyValues(baseDir);
+
+  for (const company of seedCompanies) {
+    addSearchTarget(targets, {
+      company,
+      value: company,
+      confidence: "medium",
+      source: "seed_list",
+    });
+  }
+
+  const companyRows = db
+    .prepare(
+      `
+      SELECT name, domain, company_url, careers_url, contact_url
+      FROM companies
+      ORDER BY updated_at DESC
+    `,
+    )
+    .all() as JsonRecord[];
+  for (const row of companyRows) {
+    const company = safeString(row.name);
+    if (company) {
+      addSearchTarget(targets, {
+        company,
+        value: company,
+        confidence: "medium",
+        source: "company_name",
+      });
+    }
+    for (const value of [row.domain, row.company_url, row.careers_url, row.contact_url]) {
+      const normalized = normalizeDomain(safeString(value));
+      if (!normalized) continue;
+      addSearchTarget(targets, {
+        company: company || normalized,
+        value: normalized,
+        confidence: "high",
+        source: "company_domain",
+      });
+    }
+  }
+
+  const contactRows = db
+    .prepare(
+      `
+      SELECT c.email, co.name AS company_name
+      FROM contacts c
+      LEFT JOIN companies co ON co.id = c.company_id
+      WHERE c.email != ''
+      ORDER BY c.updated_at DESC
+    `,
+    )
+    .all() as JsonRecord[];
+  for (const row of contactRows) {
+    const email = safeString(row.email);
+    if (!email) continue;
+    addSearchTarget(targets, {
+      company: safeString(row.company_name) || email,
+      value: email,
+      confidence: "high",
+      source: "contact_email",
+    });
+  }
+
+  return [...targets.values()];
+}
+
+async function auditGmailSent(targets: GmailSearchTarget[]): Promise<GmailAudit> {
   const chromeDefault = path.join(os.homedir(), "Library/Application Support/Google/Chrome/Default");
   if (!fs.existsSync(chromeDefault)) {
     return { available: false, reason: "chrome profile missing", matches: [] };
@@ -293,19 +398,16 @@ async function auditGmailSent(companies: string[]): Promise<GmailAudit> {
     }
 
     const matches: TomorrowSourcingGmailMatch[] = [];
-    for (const company of companies) {
-      const query = `in:sent "${company}"`;
+    for (const target of targets) {
+      const query = `in:sent "${target.value.replace(/"/g, "")}"`;
       await page.goto(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 120000 });
       await page.waitForTimeout(2500);
       const body = await page.locator("body").innerText().catch(() => "");
       if (!body || /No messages matched your search|No results found/i.test(body)) continue;
-      const normalized = normalizeCompanyToken(company);
-      const lower = body.toLowerCase();
-      const confidence = lower.includes(company.toLowerCase()) ? "high" : "medium";
       matches.push({
-        company,
-        matchedValue: company,
-        confidence,
+        company: target.company,
+        matchedValue: target.value,
+        confidence: target.confidence,
         timestamp: new Date().toISOString(),
         source: "gmail_sent",
       });
@@ -319,14 +421,7 @@ async function auditGmailSent(companies: string[]): Promise<GmailAudit> {
   }
 }
 
-async function discoverAshbyApplications(profile: TomorrowProfileSignals): Promise<TomorrowApplicationTarget[]> {
-  const queries = [
-    'site:jobs.ashbyhq.com Berlin "Product Designer"',
-    'site:jobs.ashbyhq.com Berlin "Design Engineer"',
-    'site:jobs.ashbyhq.com Berlin "Product Engineer"',
-    'site:jobs.ashbyhq.com Berlin "Frontend Engineer"',
-    'site:jobs.ashbyhq.com Berlin "Full Stack"',
-  ];
+async function discoverAshbyApplications(profile: TomorrowProfileSignals, queries: string[]): Promise<TomorrowApplicationTarget[]> {
 
   const boardUrls = new Set<string>();
   for (const query of queries) {
@@ -402,14 +497,7 @@ async function discoverAshbyApplications(profile: TomorrowProfileSignals): Promi
   return output;
 }
 
-async function discoverSearchApplications(profile: TomorrowProfileSignals): Promise<TomorrowApplicationTarget[]> {
-  const queries = [
-    '"Berlin" "Design Engineer" job',
-    '"Berlin" "AI Product Engineer" job',
-    '"Berlin" "Frontend & Design Engineer"',
-    '"Berlin" "Product Engineer" startup',
-    '"Berlin" "Product Designer" startup',
-  ];
+async function discoverSearchApplications(profile: TomorrowProfileSignals, queries: string[]): Promise<TomorrowApplicationTarget[]> {
   const candidates: TomorrowApplicationTarget[] = [];
   for (const query of queries) {
     const results = await searchDuckDuckGo(query);
@@ -513,14 +601,7 @@ async function discoverDbCareersApplications(baseDir: string, profile: TomorrowP
   return output;
 }
 
-async function discoverCuratedApplications(profile: TomorrowProfileSignals): Promise<TomorrowApplicationTarget[]> {
-  const curatedQueries = [
-    { company: "Langdock", query: "Langdock Design Engineer Berlin", roleHint: "Design Engineer" },
-    { company: "Kombo", query: "Kombo AI Product Engineer Berlin", roleHint: "AI Product Engineer" },
-    { company: "&why", query: "&why Frontend Design Engineer Berlin", roleHint: "Frontend & Design Engineer" },
-    { company: "Ecosia", query: "Ecosia Product Designer Berlin jobs", roleHint: "Product Designer" },
-    { company: "Bliq", query: "Bliq Product Designer Berlin startup jobs", roleHint: "Product Designer" },
-  ];
+async function discoverCuratedApplications(profile: TomorrowProfileSignals, curatedQueries: TomorrowCuratedCompany[]): Promise<TomorrowApplicationTarget[]> {
   const output: TomorrowApplicationTarget[] = [];
   for (const item of curatedQueries) {
     const results = await searchDuckDuckGo(item.query);
@@ -745,10 +826,11 @@ function buildOutreachCandidates(baseDir: string, seedMatches: Set<string>, dbMa
     items.push({
       company: companyName,
       whyItFits: reasons.join("; "),
+      targetType: pickAddressLabel(routeLabel),
       contactRoute: routeLabel,
       whoToAddress: pickAddressLabel(routeLabel),
       contactConfidence: confidence,
-      whyItIsFresh: "no strong contact match found in DB state or prior-contact seed list",
+      whyItIsFresh: "no strong contact match found in DB state, Gmail Sent, or the seed exclusion list",
       nextAction: `Send a short tailored email to ${routeLabel} tomorrow.`,
       score,
       evidence: [
@@ -777,18 +859,19 @@ function reportMarkdown(result: TomorrowSourcingResult): string {
     for (const item of items) {
       if ("applicationLink" in item) {
         lines.push(`- ${item.company} — ${item.role}`);
-        lines.push(`  Why: ${item.whyItFits}`);
-        lines.push(`  Link: ${item.applicationLink}`);
+        lines.push(`  Why it fits: ${item.whyItFits}`);
+        lines.push(`  Application link: ${item.applicationLink}`);
         lines.push(`  Urgency: ${item.urgency}`);
         lines.push(`  Confidence: ${item.confidence}`);
-        lines.push(`  Next: ${item.nextAction}`);
+        lines.push(`  Next action tomorrow: ${item.nextAction}`);
       } else {
         lines.push(`- ${item.company}`);
-        lines.push(`  Why: ${item.whyItFits}`);
-        lines.push(`  Contact: ${item.contactRoute}`);
-        lines.push(`  Address: ${item.whoToAddress}`);
+        lines.push(`  Why it fits: ${item.whyItFits}`);
+        lines.push(`  Target type: ${item.targetType || item.whoToAddress}`);
+        lines.push(`  Contact route: ${item.contactRoute}`);
+        lines.push(`  Freshness: ${item.whyItIsFresh}`);
         lines.push(`  Confidence: ${item.contactConfidence}`);
-        lines.push(`  Next: ${item.nextAction}`);
+        lines.push(`  Next action tomorrow: ${item.nextAction}`);
       }
     }
     lines.push("");
@@ -820,21 +903,41 @@ function reportMarkdown(result: TomorrowSourcingResult): string {
 
 function reportText(result: TomorrowSourcingResult): string {
   const lines: string[] = [];
-  lines.push(`Tomorrow sourcing ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
+  lines.push(`Tomorrow sourcing report-only run ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
   lines.push(`Gmail audit: ${result.report.gmailAudit.available ? "available" : `fallback (${result.report.gmailAudit.reason})`}`);
   lines.push("");
   lines.push("Top 5 Applications:");
   for (const item of result.report.topApplications) {
     lines.push(`- ${item.company} | ${item.role} | ${item.urgency} | ${item.confidence} | ${item.applicationLink}`);
+    lines.push(`  Why it fits: ${item.whyItFits}`);
+    lines.push(`  Next action tomorrow: ${item.nextAction}`);
   }
   lines.push("");
   lines.push("Top 5 Berlin Startups to Email:");
   for (const item of result.report.topOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.contactRoute} | ${item.contactConfidence} | ${item.whoToAddress}`);
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
+    lines.push(`  Why it fits: ${item.whyItFits}`);
+    lines.push(`  Freshness: ${item.whyItIsFresh}`);
+    lines.push(`  Next action tomorrow: ${item.nextAction}`);
+  }
+  lines.push("");
+  lines.push("Reserve Applications:");
+  for (const item of result.report.reserveApplications) {
+    lines.push(`- ${item.company} | ${item.role} | ${item.urgency} | ${item.confidence} | ${item.applicationLink}`);
+  }
+  lines.push("");
+  lines.push("Reserve Startups:");
+  for (const item of result.report.reserveOutreachCompanies) {
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
   }
   lines.push("");
   lines.push("Excluded Because Already Contacted:");
   for (const item of result.report.excludedAlreadyContacted.slice(0, 10)) {
+    lines.push(`- ${item.company} | ${item.reason}`);
+  }
+  lines.push("");
+  lines.push("Excluded Because Not Good Enough:");
+  for (const item of result.report.excludedNotGoodEnough.slice(0, 10)) {
     lines.push(`- ${item.company} | ${item.reason}`);
   }
   return lines.join("\n");
@@ -844,10 +947,10 @@ export function createTomorrowSourcingService(baseDir: string) {
   return {
     async run(options: TomorrowSourcingOptions = {}): Promise<TomorrowSourcingResult> {
       const profile = loadProfile(baseDir);
-      loadConfig(baseDir);
+      const config = loadConfig(baseDir);
       const seedMatches = loadSeedCompanies(baseDir);
       const { dbMatches } = buildDbExclusionSets(baseDir);
-      const gmailAudit = await auditGmailSent([...seedMatches].slice(0, 25));
+      const gmailAudit = await auditGmailSent(buildGmailSearchTargets(baseDir));
       const gmailHighMatches = new Set(
         gmailAudit.matches.filter((match) => match.confidence === "high").flatMap((match) => [normalizeCompanyToken(match.company), normalizeDomain(match.matchedValue)]),
       );
@@ -857,10 +960,10 @@ export function createTomorrowSourcingService(baseDir: string) {
 
       const [pinnedApplications, ashbyApplications, searchApplications, dbCareersApplications, curatedApplications] = await Promise.all([
         discoverPinnedApplications(profile),
-        discoverAshbyApplications(profile),
-        discoverSearchApplications(profile),
+        discoverAshbyApplications(profile, config.tomorrow.ashbyQueries),
+        discoverSearchApplications(profile, config.tomorrow.searchQueries),
         discoverDbCareersApplications(baseDir, profile),
-        discoverCuratedApplications(profile),
+        discoverCuratedApplications(profile, config.tomorrow.curatedCompanies),
       ]);
 
       const dbJobs = openDatabase(baseDir).db.prepare(`
@@ -936,15 +1039,8 @@ export function createTomorrowSourcingService(baseDir: string) {
         excludedNotGoodEnough: outreachExcluded,
       };
 
-      const markdown = reportMarkdown({ report });
       const text = reportText({ report });
-      const outputPath = options.outputPath || path.join(baseDir, "data", "reports", `${new Date().toISOString().slice(0, 10)}-tomorrow-sourcing.md`);
-      const jsonPath = options.jsonPath || path.join(baseDir, "data", "reports", `${new Date().toISOString().slice(0, 10)}-tomorrow-sourcing.json`);
-      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      fs.writeFileSync(outputPath, markdown);
-      fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
-
-      return { report, outputPath, jsonPath, text };
+      return { report, text };
     },
   };
 }

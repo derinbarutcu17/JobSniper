@@ -36,7 +36,7 @@ function help(): string {
     "  experiments",
     "  requeue <url> [lane]",
     "  sources test",
-    "  source tomorrow [--output <path>] [--json <path>]",
+    "  source tomorrow (report-only)",
     "  stats",
     "  export json [path]",
   ].join("\n");
