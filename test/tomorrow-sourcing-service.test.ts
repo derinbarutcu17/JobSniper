@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { createTomorrowSourcingService } from "../src/state/services/tomorrow-sourcing-service.js";
+import { createTomorrowSourcingService } from "../src/services/tomorrow-sourcing-service.js";
 
 vi.mock("playwright-core", () => ({
   chromium: {

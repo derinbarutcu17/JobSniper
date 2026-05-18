@@ -184,7 +184,7 @@ export function dedupeApplications(items: TomorrowApplicationTarget[]): Tomorrow
   const seen = new Set<string>();
   const output: TomorrowApplicationTarget[] = [];
   for (const item of rankApplications(items)) {
-    const key = `${normalizeCompanyToken(item.company)}::${item.role.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+    const key = normalizeCompanyToken(item.company);
     if (seen.has(key)) continue;
     seen.add(key);
     output.push(item);

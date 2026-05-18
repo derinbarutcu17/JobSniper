@@ -117,7 +117,8 @@ export function presentPipelineResult(result: PipelineResult): string {
 export function presentTomorrowSourcing(result: TomorrowSourcingResult): string {
   const lines: string[] = [];
   lines.push(`Tomorrow sourcing report-only run ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
-  lines.push(`Gmail audit: ${result.report.gmailAudit.available ? "available" : `fallback (${result.report.gmailAudit.reason})`}`);
+  lines.push(`Gmail audit: ${result.report.gmailAudit.mode || (result.report.gmailAudit.available ? "available" : "unavailable")} (${result.report.gmailAudit.reason})`);
+  if (result.report.dedupeSource) lines.push(`Dedupe source: ${result.report.dedupeSource}`);
   lines.push("");
   lines.push("Top 5 Applications:");
   for (const item of result.report.topApplications) {
@@ -128,7 +129,7 @@ export function presentTomorrowSourcing(result: TomorrowSourcingResult): string 
   lines.push("");
   lines.push("Top 5 Berlin Startups to Email:");
   for (const item of result.report.topOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactStatus || "unknown"} | ${item.contactRoute}`);
     lines.push(`  Why it fits: ${item.whyItFits}`);
     lines.push(`  Freshness: ${item.whyItIsFresh}`);
     lines.push(`  Next action tomorrow: ${item.nextAction}`);
@@ -141,7 +142,7 @@ export function presentTomorrowSourcing(result: TomorrowSourcingResult): string 
   lines.push("");
   lines.push("Reserve Startups:");
   for (const item of result.report.reserveOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactStatus || "unknown"} | ${item.contactRoute}`);
   }
   lines.push("");
   lines.push("Excluded Because Already Contacted:");

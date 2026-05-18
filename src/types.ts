@@ -805,6 +805,7 @@ export interface TomorrowCompanyOutreachTarget {
   contactRoute: string;
   whoToAddress: string;
   contactConfidence: "high" | "medium" | "low";
+  contactStatus?: "verified" | "weak" | "invalid";
   whyItIsFresh: string;
   nextAction: string;
   score: number;
@@ -829,9 +830,11 @@ export interface TomorrowSourcingReport {
   generatedAt: string;
   gmailAudit: {
     available: boolean;
+    mode?: "unavailable" | "connector_available" | "imported_snapshot";
     reason: string;
     matches: TomorrowSourcingGmailMatch[];
   };
+  dedupeSource?: string;
   topApplications: TomorrowApplicationTarget[];
   reserveApplications: TomorrowApplicationTarget[];
   topOutreachCompanies: TomorrowCompanyOutreachTarget[];

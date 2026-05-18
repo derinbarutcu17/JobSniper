@@ -1,8 +1,7 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import dns from "node:dns/promises";
 import * as cheerio from "cheerio";
-import { chromium } from "playwright-core";
 import { loadConfig } from "../../normalization/config.js";
 import {
   buildApplicationReasons,
@@ -63,6 +62,7 @@ type AshbyPosting = {
 
 type GmailAudit = {
   available: boolean;
+  mode: "unavailable" | "connector_available" | "imported_snapshot";
   reason: string;
   matches: TomorrowSourcingGmailMatch[];
 };
@@ -72,6 +72,10 @@ type GmailSearchTarget = {
   value: string;
   confidence: "high" | "medium" | "low";
   source: string;
+};
+
+type InvalidContactRoutesFile = {
+  routes?: string[];
 };
 
 function safeString(value: unknown): string {
@@ -176,7 +180,7 @@ function applicationTrust(url: string): number {
 function isApplicationUrlLikelyUseful(url: string): boolean {
   const lower = url.toLowerCase();
   if (!/^https?:\/\//.test(lower)) return false;
-  if (/linkedin\.com\/jobs\/search|glassdoor|indeed|join\.com\/companies\//.test(lower)) return false;
+  if (/linkedin\.com\/jobs\/search|glassdoor|indeed|join\.com\/companies\/|jobstacky/.test(lower)) return false;
   return /jobs|careers|ashby|lever|greenhouse|startupjobs|berlinstartupjobs/.test(lower);
 }
 
@@ -254,6 +258,15 @@ function companyFromPageTitle(title: string, url: string): string {
   return companyFromUrl(url);
 }
 
+function roleFromPageTitle(title: string): string {
+  const clean = title.trim();
+  const germanMatch = clean.match(/^.+?\s+sucht\s+(.+?)\s+in\s+berlin$/i);
+  if (germanMatch?.[1]) return germanMatch[1].trim();
+  const germanLooseMatch = clean.match(/^.+?\s+sucht\s+(.+)$/i);
+  if (germanLooseMatch?.[1]) return germanLooseMatch[1].trim();
+  return clean.replace(/\|.*$/, "").replace(/\s*@.*$/, "").trim();
+}
+
 function loadProfile(baseDir: string): TomorrowProfileSignals {
   const profilePath = path.join(baseDir, "profile", "profile.json");
   const profile = readJsonFile<JsonRecord>(profilePath, {});
@@ -274,6 +287,47 @@ function loadSeedCompanyValues(baseDir: string): string[] {
   const seedPath = path.join(baseDir, "data", "contacted-company-seed.json");
   const data = readJsonFile<ContactSeedFile>(seedPath, { companies: [] });
   return (data.companies || []).map((entry) => safeString(entry).trim()).filter((entry) => entry.length > 0);
+}
+
+function workspaceRootFromBaseDir(baseDir: string): string {
+  return path.resolve(baseDir, "..");
+}
+
+function parseBulletCompany(line: string): string {
+  return line
+    .replace(/^\s*-\s*/, "")
+    .replace(/\s+-\s+`.*$/, "")
+    .trim();
+}
+
+function loadManualContactHistory(baseDir: string): Set<string> {
+  const workspaceRoot = workspaceRootFromBaseDir(baseDir);
+  const files = [
+    { path: path.join(workspaceRoot, "memory", "sent-emails.md"), section: "## Applied / Already Reached" },
+    { path: path.join(workspaceRoot, "memory", "job-search-source-of-truth.md"), section: "## Already Applied / Contacted" },
+  ];
+  const values = new Set<string>();
+  for (const item of files) {
+    if (!fs.existsSync(item.path)) continue;
+    const lines = fs.readFileSync(item.path, "utf8").split(/\r?\n/);
+    let inSection = false;
+    for (const line of lines) {
+      if (line.startsWith("## ")) {
+        inSection = line.trim() === item.section;
+        continue;
+      }
+      if (!inSection) continue;
+      if (!line.trim().startsWith("- ")) continue;
+      const company = parseBulletCompany(line);
+      if (company) values.add(normalizeCompanyToken(company));
+    }
+  }
+  return values;
+}
+
+function loadInvalidContactRoutes(baseDir: string): Set<string> {
+  const data = readJsonFile<InvalidContactRoutesFile>(path.join(baseDir, "data", "invalid-contact-routes.json"), { routes: [] });
+  return new Set((data.routes || []).map((entry) => safeString(entry).trim().toLowerCase()).filter(Boolean));
 }
 
 function confidenceWeight(value: "high" | "medium" | "low"): number {
@@ -369,55 +423,76 @@ export function buildGmailSearchTargets(baseDir: string): GmailSearchTarget[] {
   return [...targets.values()];
 }
 
-async function auditGmailSent(targets: GmailSearchTarget[]): Promise<GmailAudit> {
-  const chromeDefault = path.join(os.homedir(), "Library/Application Support/Google/Chrome/Default");
-  if (!fs.existsSync(chromeDefault)) {
-    return { available: false, reason: "chrome profile missing", matches: [] };
-  }
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "jobsniper-gmail-"));
-  const profileRoot = path.join(tempRoot, "profile");
-  const defaultClone = path.join(profileRoot, "Default");
-  try {
-    fs.cpSync(chromeDefault, defaultClone, { recursive: true });
-    const localState = path.join(os.homedir(), "Library/Application Support/Google/Chrome/Local State");
-    if (fs.existsSync(localState)) {
-      fs.mkdirSync(profileRoot, { recursive: true });
-      fs.copyFileSync(localState, path.join(profileRoot, "Local State"));
-    }
-    const context = await chromium.launchPersistentContext(profileRoot, {
-      executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-      headless: true,
-      args: ["--profile-directory=Default"],
-    });
-    const page = context.pages()[0] || await context.newPage();
-    await page.goto("https://mail.google.com/mail/u/0/#sent", { waitUntil: "domcontentloaded", timeout: 120000 });
-    await page.waitForTimeout(4000);
-    if (page.url().includes("accounts.google.com")) {
-      await context.close();
-      return { available: false, reason: "gmail session unavailable in cloned profile", matches: [] };
-    }
+function loadGmailSnapshot(baseDir: string): TomorrowSourcingGmailMatch[] {
+  const snapshotPath = path.join(baseDir, "data", "gmail-sent-snapshot.json");
+  const raw = readJsonFile<{ matches?: TomorrowSourcingGmailMatch[] }>(snapshotPath, { matches: [] });
+  return Array.isArray(raw.matches) ? raw.matches : [];
+}
 
-    const matches: TomorrowSourcingGmailMatch[] = [];
-    for (const target of targets) {
-      const query = `in:sent "${target.value.replace(/"/g, "")}"`;
-      await page.goto(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 120000 });
-      await page.waitForTimeout(2500);
-      const body = await page.locator("body").innerText().catch(() => "");
-      if (!body || /No messages matched your search|No results found/i.test(body)) continue;
-      matches.push({
-        company: target.company,
-        matchedValue: target.value,
-        confidence: target.confidence,
-        timestamp: new Date().toISOString(),
-        source: "gmail_sent",
-      });
+async function auditGmailSent(baseDir: string, targets: GmailSearchTarget[]): Promise<GmailAudit> {
+  const snapshotMatches = loadGmailSnapshot(baseDir);
+  if (snapshotMatches.length > 0) {
+    const targetKeys = new Set(targets.flatMap((target) => [normalizeCompanyToken(target.company), normalizeDomain(target.value)]));
+    const matches = snapshotMatches.filter((match) => {
+      const companyKey = normalizeCompanyToken(match.company);
+      const valueKey = normalizeDomain(match.matchedValue);
+      return targetKeys.has(companyKey) || (valueKey && targetKeys.has(valueKey));
+    });
+    return {
+      available: true,
+      mode: "imported_snapshot",
+      reason: "using imported Gmail sent snapshot",
+      matches,
+    };
+  }
+  if (process.env.SNIPER_GMAIL_CONNECTOR_AVAILABLE === "1") {
+    return {
+      available: false,
+      mode: "connector_available",
+      reason: "Gmail connector available but not wired in this command path",
+      matches: [],
+    };
+  }
+  return {
+    available: false,
+    mode: "unavailable",
+    reason: "Gmail sent audit unavailable; using DB + seed + manual sent history only",
+    matches: [],
+  };
+}
+
+async function assessContactRoute(baseDir: string, companyName: string, companyUrl: string, route: string): Promise<"verified" | "weak" | "invalid"> {
+  const invalidRoutes = loadInvalidContactRoutes(baseDir);
+  const normalizedRoute = route.trim().toLowerCase();
+  if (!normalizedRoute) return "invalid";
+  if (invalidRoutes.has(normalizedRoute)) return "invalid";
+
+  const emailMatch = normalizedRoute.match(/^[^@\s]+@([^@\s]+)$/);
+  const routeDomain = emailMatch ? emailMatch[1] : normalizeDomain(normalizedRoute);
+  if (routeDomain) {
+    try {
+      await dns.lookup(routeDomain);
+    } catch {
+      return "invalid";
     }
-    await context.close();
-    return { available: true, reason: "ok", matches };
-  } catch (error) {
-    return { available: false, reason: error instanceof Error ? error.message : String(error), matches: [] };
-  } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+
+  const homepage = companyUrl || (route.startsWith("http") ? route : "");
+  if (!homepage) return emailMatch ? "verified" : "weak";
+  try {
+    const html = await fetchHtml(homepage);
+    const title = ((html.match(/<title[^>]*>([^<]+)/i) || [])[1] || "").trim().toLowerCase();
+    const text = htmlToText(html).slice(0, 1200).toLowerCase();
+    if (/rtp slot|jackpot|gacor|casino|betting|gambling/.test(`${title} ${text}`)) return "invalid";
+    if (!title && text.length < 50) return "weak";
+    const normalizedCompany = normalizeCompanyToken(companyName);
+    const pageSignals = `${title} ${text}`;
+    if (normalizedCompany && !pageSignals.includes(normalizedCompany.split(" ")[0] || "")) {
+      return "weak";
+    }
+    return "verified";
+  } catch {
+    return emailMatch ? "weak" : "invalid";
   }
 }
 
@@ -453,7 +528,7 @@ async function discoverAshbyApplications(profile: TomorrowProfileSignals, querie
       if (score < 25) continue;
       output.push({
         company,
-        role: title.replace(/\s*@.*$/, "").trim(),
+        role: roleFromPageTitle(title),
         whyItFits: buildApplicationReasons({ title, text, location, profile }).join("; "),
         applicationLink: url,
         urgency: inferUrgency(text),
@@ -516,7 +591,7 @@ async function discoverSearchApplications(profile: TomorrowProfileSignals, queri
       if (score < 28) continue;
       candidates.push({
         company,
-        role: pageTitle.replace(/\|.*$/, "").replace(/\s*@.*$/, "").trim(),
+        role: roleFromPageTitle(pageTitle),
         whyItFits: buildApplicationReasons({ title: pageTitle, text: `${result.snippet} ${text}`, location, profile }).join("; "),
         applicationLink: result.url,
         urgency: inferUrgency(`${result.snippet} ${text}`),
@@ -585,7 +660,7 @@ async function discoverDbCareersApplications(baseDir: string, profile: TomorrowP
       if (score < 24) continue;
       output.push({
         company,
-        role: title.replace(/\|.*$/, "").trim(),
+        role: roleFromPageTitle(title),
         whyItFits: buildApplicationReasons({ title, text, location, profile }).join("; "),
         applicationLink: careersUrl,
         urgency: inferUrgency(text),
@@ -618,7 +693,7 @@ async function discoverCuratedApplications(profile: TomorrowProfileSignals, cura
       if (score < 22) continue;
       output.push({
         company: item.company,
-        role: title.replace(/\|.*$/, "").replace(/\s*@.*$/, "").trim(),
+        role: roleFromPageTitle(title),
         whyItFits: buildApplicationReasons({ title, text, location, profile }).join("; "),
         applicationLink: hit.url,
         urgency: inferUrgency(text),
@@ -671,20 +746,6 @@ async function discoverPinnedApplications(profile: TomorrowProfileSignals): Prom
       fallbackLocation: "Berlin",
       fallbackText: "Product designer Berlin mobility interfaces product systems startup apply",
     },
-    {
-      company: "Intercom",
-      url: "https://startup.jobs/product-engineer-intercom-7409619",
-      roleHint: "Product Engineer",
-      fallbackLocation: "Berlin",
-      fallbackText: "Product engineer Berlin AI customer service SaaS customer problems multidisciplinary teams 2+ years apply",
-    },
-    {
-      company: "Wunderflats",
-      url: "https://startup.jobs/product-designer-wunderflats-7657202",
-      roleHint: "Product Designer",
-      fallbackLocation: "Berlin",
-      fallbackText: "Product designer Berlin design system product managers engineers visual craft interfaces AI assisted tools apply",
-    },
   ];
 
   const output: TomorrowApplicationTarget[] = [];
@@ -708,7 +769,7 @@ async function discoverPinnedApplications(profile: TomorrowProfileSignals): Prom
     if (score < 20) continue;
     output.push({
       company: item.company,
-      role: pageTitle.replace(/\|.*$/, "").replace(/\s*@.*$/, "").trim(),
+      role: /sucht/i.test(pageTitle) ? item.roleHint : roleFromPageTitle(pageTitle),
       whyItFits: buildApplicationReasons({ title: pageTitle, text, location, profile }).join("; "),
       applicationLink: item.url,
       urgency: inferUrgency(text),
@@ -742,6 +803,16 @@ function buildDbExclusionSets(baseDir: string): { dbMatches: Set<string>; snapsh
   return { dbMatches, snapshots };
 }
 
+function buildApplicationExclusionSet(baseDir: string): Set<string> {
+  const values = new Set<string>();
+  for (const value of loadSeedCompanies(baseDir)) values.add(value);
+  for (const value of loadManualContactHistory(baseDir)) values.add(value);
+  for (const value of buildDbExclusionSets(baseDir).dbMatches) {
+    if (!value.includes(".")) values.add(value);
+  }
+  return values;
+}
+
 function pickAddressLabel(emailOrRoute: string): string {
   const value = emailOrRoute.toLowerCase();
   if (value.includes("jobs@") || value.includes("career")) return "Hiring team";
@@ -751,7 +822,20 @@ function pickAddressLabel(emailOrRoute: string): string {
   return "Team";
 }
 
-function buildOutreachCandidates(baseDir: string, seedMatches: Set<string>, dbMatches: Set<string>, gmailHighMatches: Set<string>, gmailMediumMatches: Set<string>): { items: TomorrowCompanyOutreachTarget[]; excluded: TomorrowExclusionRecord[] } {
+function prioritizeApplications(items: TomorrowApplicationTarget[]): TomorrowApplicationTarget[] {
+  const preferredOrder = ["langdock", "kombo", "andwhy"];
+  const normalized = (value: string) => normalizeCompanyToken(value).replace(/\s+/g, "");
+  return [...items].sort((left, right) => {
+    const leftIndex = preferredOrder.indexOf(normalized(left.company));
+    const rightIndex = preferredOrder.indexOf(normalized(right.company));
+    const leftRank = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+    const rightRank = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return right.score - left.score;
+  });
+}
+
+async function buildOutreachCandidates(baseDir: string, seedMatches: Set<string>, dbMatches: Set<string>, gmailHighMatches: Set<string>, gmailMediumMatches: Set<string>): Promise<{ items: TomorrowCompanyOutreachTarget[]; excluded: TomorrowExclusionRecord[] }> {
   const { db } = openDatabase(baseDir);
   const rows = db.prepare(`
     SELECT
@@ -819,9 +903,14 @@ function buildOutreachCandidates(baseDir: string, seedMatches: Set<string>, dbMa
       kind: /@/.test(bestContact) ? "email" : /contact|imprint/.test(bestContact) ? "contact_page" : "website",
       value: bestContact,
     };
+    const contactStatus = await assessContactRoute(baseDir, companyName, safeString(row.company_url), bestContact);
+    if (contactStatus === "invalid") {
+      excluded.push(exclusionRecord(companyName, "contact route failed revalidation"));
+      continue;
+    }
     const reasons = buildOutreachReasons({ pitchTheme: safeString(row.pitch_theme), route, startupScore, directContactCount });
     const confidence = resolveContactConfidence(contact);
-    const score = startupScore * 2 + directContactCount * 4 + (confidence === "high" ? 8 : confidence === "medium" ? 4 : 1) + (route.includes("direct_email") ? 6 : route.includes("founder") ? 5 : 0);
+    const score = startupScore * 2 + directContactCount * 4 + (confidence === "high" ? 8 : confidence === "medium" ? 4 : 1) + (route.includes("direct_email") ? 6 : route.includes("founder") ? 5 : 0) + (contactStatus === "verified" ? 6 : 2);
     const routeLabel = /@/.test(bestContact) ? bestContact : safeString(row.contact_url) || safeString(row.careers_url) || bestContact;
     items.push({
       company: companyName,
@@ -830,6 +919,7 @@ function buildOutreachCandidates(baseDir: string, seedMatches: Set<string>, dbMa
       contactRoute: routeLabel,
       whoToAddress: pickAddressLabel(routeLabel),
       contactConfidence: confidence,
+      contactStatus,
       whyItIsFresh: "no strong contact match found in DB state, Gmail Sent, or the seed exclusion list",
       nextAction: `Send a short tailored email to ${routeLabel} tomorrow.`,
       score,
@@ -847,7 +937,8 @@ function reportMarkdown(result: TomorrowSourcingResult): string {
   const lines: string[] = [];
   lines.push(`# Tomorrow sourcing report`);
   lines.push(`Generated: ${result.report.generatedAt}`);
-  lines.push(`Gmail audit: ${result.report.gmailAudit.available ? "available" : `fallback (${result.report.gmailAudit.reason})`}`);
+  lines.push(`Gmail audit: ${result.report.gmailAudit.mode || (result.report.gmailAudit.available ? "available" : "unavailable")} (${result.report.gmailAudit.reason})`);
+  if (result.report.dedupeSource) lines.push(`Dedupe source: ${result.report.dedupeSource}`);
   lines.push("");
   const pushSection = (title: string, items: Array<TomorrowApplicationTarget | TomorrowCompanyOutreachTarget>) => {
     lines.push(`## ${title}`);
@@ -869,6 +960,7 @@ function reportMarkdown(result: TomorrowSourcingResult): string {
         lines.push(`  Why it fits: ${item.whyItFits}`);
         lines.push(`  Target type: ${item.targetType || item.whoToAddress}`);
         lines.push(`  Contact route: ${item.contactRoute}`);
+        lines.push(`  Contact status: ${item.contactStatus || "unknown"}`);
         lines.push(`  Freshness: ${item.whyItIsFresh}`);
         lines.push(`  Confidence: ${item.contactConfidence}`);
         lines.push(`  Next action tomorrow: ${item.nextAction}`);
@@ -904,7 +996,8 @@ function reportMarkdown(result: TomorrowSourcingResult): string {
 function reportText(result: TomorrowSourcingResult): string {
   const lines: string[] = [];
   lines.push(`Tomorrow sourcing report-only run ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
-  lines.push(`Gmail audit: ${result.report.gmailAudit.available ? "available" : `fallback (${result.report.gmailAudit.reason})`}`);
+  lines.push(`Gmail audit: ${result.report.gmailAudit.mode || (result.report.gmailAudit.available ? "available" : "unavailable")} (${result.report.gmailAudit.reason})`);
+  if (result.report.dedupeSource) lines.push(`Dedupe source: ${result.report.dedupeSource}`);
   lines.push("");
   lines.push("Top 5 Applications:");
   for (const item of result.report.topApplications) {
@@ -915,7 +1008,7 @@ function reportText(result: TomorrowSourcingResult): string {
   lines.push("");
   lines.push("Top 5 Berlin Startups to Email:");
   for (const item of result.report.topOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactStatus || "unknown"} | ${item.contactRoute}`);
     lines.push(`  Why it fits: ${item.whyItFits}`);
     lines.push(`  Freshness: ${item.whyItIsFresh}`);
     lines.push(`  Next action tomorrow: ${item.nextAction}`);
@@ -928,7 +1021,7 @@ function reportText(result: TomorrowSourcingResult): string {
   lines.push("");
   lines.push("Reserve Startups:");
   for (const item of result.report.reserveOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactRoute}`);
+    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactStatus || "unknown"} | ${item.contactRoute}`);
   }
   lines.push("");
   lines.push("Excluded Because Already Contacted:");
@@ -949,14 +1042,16 @@ export function createTomorrowSourcingService(baseDir: string) {
       const profile = loadProfile(baseDir);
       const config = loadConfig(baseDir);
       const seedMatches = loadSeedCompanies(baseDir);
+      const manualHistoryMatches = loadManualContactHistory(baseDir);
       const { dbMatches } = buildDbExclusionSets(baseDir);
-      const gmailAudit = await auditGmailSent(buildGmailSearchTargets(baseDir));
+      const gmailAudit = await auditGmailSent(baseDir, buildGmailSearchTargets(baseDir));
       const gmailHighMatches = new Set(
         gmailAudit.matches.filter((match) => match.confidence === "high").flatMap((match) => [normalizeCompanyToken(match.company), normalizeDomain(match.matchedValue)]),
       );
       const gmailMediumMatches = new Set(
         gmailAudit.matches.filter((match) => match.confidence === "medium").flatMap((match) => [normalizeCompanyToken(match.company), normalizeDomain(match.matchedValue)]),
       );
+      const applicationExclusions = buildApplicationExclusionSet(baseDir);
 
       const [pinnedApplications, ashbyApplications, searchApplications, dbCareersApplications, curatedApplications] = await Promise.all([
         discoverPinnedApplications(profile),
@@ -1006,11 +1101,14 @@ export function createTomorrowSourcingService(baseDir: string) {
         ...dbCareersApplications,
         ...curatedApplications,
         ...dbApplications,
-      ]);
+      ]).filter((item) => !applicationExclusions.has(normalizeCompanyToken(item.company)));
 
       const contactedExclusions: TomorrowExclusionRecord[] = [];
       for (const value of seedMatches) {
         contactedExclusions.push(exclusionRecord(value, "present in prior-contact seed list"));
+      }
+      for (const value of manualHistoryMatches) {
+        contactedExclusions.push(exclusionRecord(value, "present in manual sent-history files"));
       }
       for (const value of dbMatches) {
         if (value.includes(".") || value.length < 2) continue;
@@ -1020,19 +1118,27 @@ export function createTomorrowSourcingService(baseDir: string) {
         contactedExclusions.push(exclusionRecord(match.company, `${match.confidence}-confidence Gmail Sent match`));
       }
 
-      const { items: outreachItems, excluded: outreachExcluded } = buildOutreachCandidates(baseDir, seedMatches, dbMatches, gmailHighMatches, gmailMediumMatches);
-      const rankedApplications = rankApplications(applications);
+      const { items: outreachItems, excluded: outreachExcluded } = await buildOutreachCandidates(
+        baseDir,
+        new Set([...seedMatches, ...manualHistoryMatches]),
+        dbMatches,
+        gmailHighMatches,
+        gmailMediumMatches,
+      );
+      const rankedApplications = prioritizeApplications(rankApplications(applications));
       const rankedOutreach = rankOutreach(outreachItems);
 
       const report: TomorrowSourcingReport = {
         generatedAt: new Date().toISOString(),
         gmailAudit: {
           available: gmailAudit.available,
+          mode: gmailAudit.mode,
           reason: gmailAudit.reason,
           matches: gmailAudit.matches,
         },
-        topApplications: rankedApplications.slice(0, 5),
-        reserveApplications: rankedApplications.slice(5, 8),
+        dedupeSource: gmailAudit.mode === "imported_snapshot" ? "db + seed + manual history + gmail snapshot" : "db + seed + manual history",
+        topApplications: rankedApplications.slice(0, 3),
+        reserveApplications: rankedApplications.slice(3, 6),
         topOutreachCompanies: rankedOutreach.slice(0, 5),
         reserveOutreachCompanies: rankedOutreach.slice(5, 8),
         excludedAlreadyContacted: contactedExclusions,

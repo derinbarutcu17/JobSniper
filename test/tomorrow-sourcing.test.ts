@@ -60,7 +60,7 @@ describe("tomorrow sourcing helpers", () => {
     expect(buildApplicationReasons({ title: "Design Engineer", text: "AI product role", location: "Berlin", profile })).toContain("direct design-and-engineering overlap");
   });
 
-  it("dedupes duplicate applications by company and role", () => {
+  it("dedupes duplicate applications by company for the daily shortlist", () => {
     const ranked = dedupeApplications([
       {
         company: "Langdock",
@@ -77,7 +77,7 @@ describe("tomorrow sourcing helpers", () => {
       },
       {
         company: "Langdock",
-        role: "Design Engineer",
+        role: "Design Engineer in Berlin",
         whyItFits: "",
         applicationLink: "https://example.com/2",
         urgency: "medium",
