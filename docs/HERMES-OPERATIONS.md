@@ -167,7 +167,6 @@ npm run live:sync
 Use:
 
 - `npm run live:sync` to refresh the private live repo from SQLite-derived dashboard data
-- `npm run live:deploy` to refresh and publish to Vercel production
 
 ## Best cron strategy
 
@@ -238,7 +237,7 @@ Most important operating rule:
 
 - do not track sent/reached/applied truth in local markdown lists
 - update outreach and application state in Job Sniper itself
-- then publish that exact DB-backed state to Sheets and the live dashboard
+- then publish that exact DB-backed state to Sheets and refresh the live dashboard snapshot
 
 Hermes should prefer:
 

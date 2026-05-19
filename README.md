@@ -6,7 +6,7 @@ It does three things well:
 
 - scrapes jobs, companies, and public contact surfaces
 - judges which results are actually worth attention
-- publishes the working state to a live dashboard and optional Google Sheets
+- refreshes a live dashboard snapshot and optional Google Sheets
 
 This repo is built for a practical workflow, not demo theatrics:
 
@@ -93,7 +93,6 @@ This is the operating rule:
 Everything else is a projection:
 
 - the live dashboard
-- Vercel deployment
 - Google Sheets
 - JSON exports
 
@@ -263,15 +262,9 @@ npm run sniper -- sheet sync
 npm run live:sync
 ```
 
-Deploy the live dashboard:
-
-```bash
-npm run live:deploy
-```
-
 ## Live Web UI
 
-The private live dashboard is a published projection of the current SQLite state.
+The private live dashboard is a snapshot projection of the current SQLite state.
 
 It is meant for:
 
@@ -282,11 +275,10 @@ It is meant for:
 
 It is not a second database.
 
-Current deployment flow:
+Current sync flow:
 
 1. update SQLite-backed state
 2. run `npm run live:sync`
-3. run `npm run live:deploy` when you want production updated
 
 Generated status artifacts are produced locally when you run export/sync commands and are not committed to the repo.
 

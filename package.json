@@ -9,7 +9,6 @@
     "build:runtime": "tsc -p tsconfig.runtime.json",
     "dashboard:export": "npx tsx ./scripts/export-dashboard-data.ts",
     "live:sync": "node ./scripts/sync-live-state.mjs",
-    "live:deploy": "node ./scripts/sync-live-state.mjs --deploy",
     "sync:state": "npm run dashboard:export && npm run sniper -- sheet sync",
     "pretest": "node ./scripts/repair-vitest.mjs",
     "test": "vitest run test/*.test.ts",

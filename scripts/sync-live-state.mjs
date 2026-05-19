@@ -55,18 +55,9 @@ function syncDashboardFiles() {
   );
 }
 
-function deployIfRequested() {
-  if (!process.argv.includes("--deploy")) return;
-  if (!fs.existsSync(path.join(liveDir, ".vercel", "project.json"))) {
-    throw new Error("Live dashboard is not linked to a Vercel project. Run a manual Vercel deploy once from jobsniper-live first.");
-  }
-  run("npx", ["vercel", "deploy", "--prod", "--yes"], liveDir);
-}
-
 ensureLinkedLiveDir();
 run("npm", ["run", "dashboard:export"], baseDir);
 syncDashboardFiles();
-deployIfRequested();
 
 process.stdout.write(
   JSON.stringify(
@@ -74,7 +65,6 @@ process.stdout.write(
       ok: true,
       baseDir,
       liveDir,
-      deployed: process.argv.includes("--deploy"),
     },
     null,
     2,

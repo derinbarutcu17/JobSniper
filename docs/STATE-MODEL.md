@@ -8,7 +8,6 @@ Everything else is a projection:
 - Google Sheets
 - `dashboard/data/dashboard.json`
 - the `jobsniper-live` folder
-- the Vercel deployment
 
 ## Operational Rule
 
@@ -20,12 +19,6 @@ Recommended commands:
 
 ```bash
 npm run live:sync
-```
-
-or
-
-```bash
-npm run live:deploy
 ```
 
 ## Sheets Policy
