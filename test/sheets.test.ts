@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
-import { openDatabase, recordRunMetrics, upsertJob } from "../src/db.js";
-import { pullSheets, syncSheets, type SheetGateway } from "../src/sheets.js";
+import { loadConfig } from "../src/normalization/config.js";
+import { openDatabase, recordRunMetrics, upsertJob } from "../src/state/db.js";
+import { pullSheets, syncSheets, type SheetGateway } from "../src/state/sheets.js";
 import type { ListingCandidate, ProfileSummary, SniperConfig } from "../src/types.js";
 import { makeTempDir } from "./helpers.js";
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { draftOutreach } from "../src/draft.js";
-import { openDatabase } from "../src/db.js";
-import { onboardProfile } from "../src/profile.js";
+import { draftOutreach } from "../src/presentation/draft.js";
+import { openDatabase } from "../src/state/db.js";
+import { onboardProfile } from "../src/normalization/profile.js";
 import { makeTempDir } from "./helpers.js";
 
 describe("draft generation", () => {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { discoverFromAtsBoard, expandSearchResult } from "../src/search/ats.js";
+import { discoverFromAtsBoard, expandSearchResult } from "../src/ingestion/search/ats.js";
 import { canonicalJobKey } from "../src/lib/url.js";
-import { defaultConfig } from "../src/config.js";
-import { discoverFromRss } from "../src/search/rss.js";
-import { classifyCandidate, classifyPageType } from "../src/search/classify.js";
-import { buildPageRecord, extractContacts } from "../src/search/extract.js";
-import { discoverFromJobBoard } from "../src/search/job-boards.js";
+import { defaultConfig } from "../src/normalization/config.js";
+import { discoverFromRss } from "../src/ingestion/search/rss.js";
+import { classifyCandidate, classifyPageType } from "../src/ingestion/search/classify.js";
+import { buildPageRecord, extractContacts } from "../src/ingestion/search/extract.js";
+import { discoverFromJobBoard } from "../src/ingestion/search/job-boards.js";
 import { fixture, makeFetchStub } from "./helpers.js";
 
 describe("parsers", () => {

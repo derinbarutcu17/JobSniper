@@ -1,14 +1,14 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { runCli } from "../src/presentation/cli.ts";
 
-const baseDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cliEntry = path.join(baseDir, "scripts", "run-sniper-cli.mjs");
+const baseDir = process.env.SNIPER_BASE_DIR || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const result = spawnSync(process.execPath, ["--import", "tsx", cliEntry, ...process.argv.slice(2)], {
-  cwd: baseDir,
-  stdio: "inherit",
-  env: { ...process.env, SNIPER_BASE_DIR: baseDir },
-});
-
-process.exit(result.status ?? 1);
+runCli(process.argv.slice(2), baseDir)
+  .then((output) => {
+    process.stdout.write(`${output}\n`);
+  })
+  .catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  });

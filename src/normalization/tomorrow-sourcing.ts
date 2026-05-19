@@ -19,6 +19,11 @@ export function normalizeDomain(input: string): string {
   return input.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").trim();
 }
 
+function linkDomain(value: string): string {
+  if (!/^https?:\/\//.test(value)) return "";
+  return normalizeDomain(value);
+}
+
 export function isSeniorTitle(title: string): boolean {
   const lower = title.toLowerCase();
   return SENIOR_TERMS.some((term) => lower.includes(term));
@@ -184,7 +189,7 @@ export function dedupeApplications(items: TomorrowApplicationTarget[]): Tomorrow
   const seen = new Set<string>();
   const output: TomorrowApplicationTarget[] = [];
   for (const item of rankApplications(items)) {
-    const key = normalizeCompanyToken(item.company);
+    const key = `${normalizeCompanyToken(item.company)}|${linkDomain(item.applicationLink)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     output.push(item);
@@ -196,7 +201,8 @@ export function dedupeOutreach(items: TomorrowCompanyOutreachTarget[]): Tomorrow
   const seen = new Set<string>();
   const output: TomorrowCompanyOutreachTarget[] = [];
   for (const item of rankOutreach(items)) {
-    const key = normalizeCompanyToken(item.company);
+    const routeDomain = linkDomain(item.contactRoute);
+    const key = `${normalizeCompanyToken(item.company)}|${routeDomain}`;
     if (seen.has(key)) continue;
     seen.add(key);
     output.push(item);

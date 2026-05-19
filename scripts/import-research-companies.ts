@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import pdf from "pdf-parse";
-import { openDatabase, upsertCompany, upsertContact } from "../src/db.ts";
+import { openDatabase, upsertCompany, upsertContact } from "../src/state/db.ts";
 import { canonicalCompanyKey, canonicalContactKey, domainFromUrl } from "../src/lib/url.ts";
 import type { CompanyRecordInput, ContactKind, PitchTheme, RecommendedRoute } from "../src/types.ts";
 

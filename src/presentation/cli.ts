@@ -39,6 +39,9 @@ function help(): string {
     "  source tomorrow (report-only)",
     "  stats",
     "  export json [path]",
+    "  daily [limit]",
+    "  snap job <job-id> [--status <status>] [--method <method>] [--note <text>]",
+    "  snap company <company-ref> [--status <status>] [--channel <channel>] [--note <text>]",
   ].join("\n");
 }
 

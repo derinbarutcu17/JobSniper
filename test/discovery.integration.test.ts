@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDatabase } from "../src/db.js";
-import { onboardProfile } from "../src/profile.js";
-import { runDiscovery } from "../src/search/discovery.js";
+import { openDatabase } from "../src/state/db.js";
+import { onboardProfile } from "../src/normalization/profile.js";
+import { runDiscovery } from "../src/ingestion/search/discovery.js";
 import { fixture, makeFetchStub, makeTempDir } from "./helpers.js";
 
 describe("discovery integration", () => {

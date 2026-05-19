@@ -110,7 +110,7 @@ function parseLinkedInListings(html: string, source: JobBoardSource): ListingCan
 function extractGoogleBlocks(html: string): Array<{ title: string; company: string; location: string; snippet: string; url: string; postedAt: string }> {
   const blocks: Array<{ title: string; company: string; location: string; snippet: string; url: string; postedAt: string }> = [];
   const hiddenData = [
-    ...html.matchAll(/520084652":(\[.*?\]\s*])\s*}\s*]\s*]\s*]\s*]\s*]/gs),
+    ...html.matchAll(/520084652":(\[.*?\]\s*])\s*}\s*]\s*]\s*]\s*]/gs),
     ...html.matchAll(/520084652":(\[\[.*?\]\])/gs),
   ];
   for (const match of hiddenData) {
@@ -129,7 +129,7 @@ function extractGoogleBlocks(html: string): Array<{ title: string; company: stri
         }
       }
     } catch {
-      // Ignore malformed hidden blocks and continue with DOM fallback.
+      // Ignore malformed hidden blocks.
     }
   }
   return blocks;
@@ -185,6 +185,271 @@ function parseGoogleListings(html: string, source: JobBoardSource): ListingCandi
   });
 }
 
+async function fetchYCJobs(source: JobBoardSource, deps: Dependencies, config: SniperConfig): Promise<ListingCandidate[]> {
+  const response = await deps.fetch("https://www.ycombinator.com/api/jobs");
+  if (!response.ok) {
+    throw new Error(`YC Jobs API fetch failed with ${response.status}`);
+  }
+  const json = (await response.json()) as { jobs?: Array<Record<string, unknown>> };
+  const query = buildSearchTerm(config, source).toLowerCase();
+  const maxResults = source.maxResults ?? config.search.maxResultsPerQuery;
+
+  return (json.jobs ?? [])
+    .filter((job) => {
+      const location = String(job.location ?? "").toLowerCase();
+      const title = String(job.title ?? "").toLowerCase();
+      const isBerlinOrRemote = /berlin|germany|remote|europe|eu/.test(location);
+      const hasKeyword = /design|engineer|product|frontend|ai|llm|agent|typescript|python|react/.test(title);
+      return isBerlinOrRemote && hasKeyword;
+    })
+    .slice(0, maxResults)
+    .map((job) => {
+      const location = String(job.location ?? "");
+      const title = String(job.title ?? "");
+      const company = String(job.company_name ?? job.company ?? "YC company");
+      const url = String(job.url ?? `https://www.ycombinator.com/companies/${String(job.company_id ?? "").toLowerCase()}/jobs/${String(job.id ?? "")}`);
+      const description = summarizeToLine(String(job.description ?? `${title} at ${company} in ${location}`), 1000);
+      return {
+        lane: source.lane,
+        externalId: String(job.id ?? url),
+        title,
+        titleFamily: "",
+        company,
+        location,
+        country: /berlin|germany|deutschland/i.test(location) ? "Germany" : /europe|eu|remote/i.test(location) ? "" : "",
+        language: inferLanguage(`${title} ${description}`),
+        workModel: inferWorkModel(`${title} ${description} ${location}`),
+        employmentType: String(job.job_type ?? ""),
+        salary: "",
+        description,
+        url,
+        applyUrl: url,
+        source: source.name,
+        sourceType: "job_board",
+        sourceUrls: uniqueNonEmpty([url]),
+        companyUrl: `https://www.ycombinator.com/companies/${String(job.company_id ?? "").toLowerCase()}`,
+        careersUrl: url,
+        aboutUrl: "",
+        teamUrl: "",
+        contactUrl: "",
+        pressUrl: "",
+        companyLinkedinUrl: "",
+        publicContacts: [],
+        postedAt: String(job.created_at ?? ""),
+        validThrough: "",
+        department: String(job.department ?? ""),
+        experienceYearsText: "",
+        remoteScope: /remote/i.test(location) ? "global" : "",
+        applicantLocationRequirements: [],
+        applicationContactName: "",
+        applicationContactEmail: "",
+        parseConfidence: 0.88,
+        sourceConfidence: 0.9,
+        isRealJobPage: true,
+        raw: { provider: "yc_jobs", ...job },
+      };
+    });
+}
+
+async function fetchRemoteOK(source: JobBoardSource, deps: Dependencies, config: SniperConfig): Promise<ListingCandidate[]> {
+  const response = await deps.fetch("https://remoteok.com/api");
+  if (!response.ok) {
+    throw new Error(`RemoteOK fetch failed with ${response.status}`);
+  }
+  const json = (await response.json()) as Array<Record<string, unknown>>;
+  const maxResults = source.maxResults ?? config.search.maxResultsPerQuery;
+
+  return json
+    .filter((job) => String(job.id ?? "") !== "header")
+    .filter((job) => {
+      const location = String(job.location ?? "").toLowerCase();
+      const tags = Array.isArray(job.tags) ? (job.tags as Array<Record<string, unknown>>).map((t) => String(t.tag ?? "")).join(" ").toLowerCase() : "";
+      const isEuropeOrRemote = /europe|eu|berlin|germany|remote|worldwide/.test(location) || /europe|berlin|germany/.test(tags);
+      return isEuropeOrRemote;
+    })
+    .slice(0, maxResults)
+    .map((job) => {
+      const title = String(job.position ?? job.title ?? "Untitled role");
+      const company = String(job.company ?? "RemoteOK company");
+      const location = String(job.location ?? "Remote");
+      const url = String(job.url ?? "");
+      const description = summarizeToLine(String(job.description ?? `${title} at ${company}`), 1000);
+      const tags = Array.isArray(job.tags) ? (job.tags as Array<Record<string, unknown>>).map((t) => String(t.tag ?? "")).join(" ") : "";
+      return {
+        lane: source.lane,
+        externalId: String(job.id ?? url),
+        title,
+        titleFamily: "",
+        company,
+        location,
+        country: /berlin|germany|deutschland/i.test(location) ? "Germany" : /europe|eu/i.test(location + " " + tags) ? "" : "",
+        language: inferLanguage(`${title} ${description}`),
+        workModel: inferWorkModel(`${title} ${description} ${location}`),
+        employmentType: /full[- ]time/i.test(tags) ? "full-time" : /contract/i.test(tags) ? "contract" : "",
+        salary: String(job.salary ?? ""),
+        description,
+        url,
+        applyUrl: url,
+        source: source.name,
+        sourceType: "job_board",
+        sourceUrls: uniqueNonEmpty([url]),
+        companyUrl: "",
+        careersUrl: url,
+        aboutUrl: "",
+        teamUrl: "",
+        contactUrl: "",
+        pressUrl: "",
+        companyLinkedinUrl: "",
+        publicContacts: [],
+        postedAt: job.date ? new Date(Number(job.date) * 1000).toISOString() : "",
+        validThrough: "",
+        department: "",
+        experienceYearsText: "",
+        remoteScope: "global",
+        applicantLocationRequirements: [],
+        applicationContactName: "",
+        applicationContactEmail: "",
+        parseConfidence: 0.7,
+        sourceConfidence: 0.72,
+        isRealJobPage: true,
+        raw: { provider: "remoteok", ...job },
+      };
+    });
+}
+
+async function fetchStepStone(source: JobBoardSource, deps: Dependencies, config: SniperConfig): Promise<ListingCandidate[]> {
+  const query = buildSearchTerm(config, source);
+  const location = source.location?.trim() || "Berlin";
+  const maxResults = source.maxResults ?? config.search.maxResultsPerQuery;
+  const url = `https://www.stepstone.de/jobs/${encodeURIComponent(query)}?st=${encodeURIComponent(location)}`;
+
+  const response = await deps.fetch(url);
+  if (!response.ok) {
+    throw new Error(`StepStone fetch failed with ${response.status}`);
+  }
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  const listings: ListingCandidate[] = [];
+
+  $(".ResultCard").each((_, element) => {
+    const title = $(element).find(".ResultCard-headline").text().trim();
+    const company = $(element).find(".ResultCard-company").text().trim();
+    const location = $(element).find(".ResultCard-location").text().trim();
+    const anchor = $(element).find("a.ResultCard-link").first();
+    const href = normalizeUrl(anchor.attr("href") ?? "");
+    if (!title || !company || !href) return;
+    const description = summarizeToLine($(element).find(".ResultCard-listingDescription").text().trim(), 1000);
+    listings.push({
+      lane: source.lane,
+      externalId: href,
+      title,
+      titleFamily: "",
+      company,
+      location,
+      country: /berlin|germany|deutschland/i.test(location) ? "Germany" : "",
+      language: "de",
+      workModel: inferWorkModel(`${title} ${description} ${location}`),
+      employmentType: inferEmploymentType(description),
+      salary: $(element).find(".ResultCard-salary").text().trim(),
+      description,
+      url: href,
+      applyUrl: href,
+      source: source.name,
+      sourceType: "job_board",
+      sourceUrls: uniqueNonEmpty([href]),
+      companyUrl: "",
+      careersUrl: "",
+      aboutUrl: "",
+      teamUrl: "",
+      contactUrl: "",
+      pressUrl: "",
+      companyLinkedinUrl: "",
+      publicContacts: [],
+      postedAt: "",
+      validThrough: "",
+      department: "",
+      experienceYearsText: (description.match(/(\d+\+?\s+[Jj]ahre)/)?.[1] ?? "").trim(),
+      remoteScope: inferWorkModel(`${title} ${description} ${location}`) === "remote" ? "global" : "",
+      applicantLocationRequirements: [],
+      applicationContactName: "",
+      applicationContactEmail: "",
+      parseConfidence: 0.68,
+      sourceConfidence: 0.7,
+      isRealJobPage: true,
+      raw: { provider: "stepstone" },
+    });
+  });
+
+  return listings.slice(0, maxResults);
+}
+
+async function fetchIndeed(source: JobBoardSource, deps: Dependencies, config: SniperConfig): Promise<ListingCandidate[]> {
+  const query = buildSearchTerm(config, source);
+  const location = source.location?.trim() || "Berlin";
+  const maxResults = source.maxResults ?? config.search.maxResultsPerQuery;
+  const url = `https://de.indeed.com/Jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent(location)}`;
+
+  const response = await deps.fetch(url);
+  if (!response.ok) {
+    throw new Error(`Indeed fetch failed with ${response.status}`);
+  }
+  const html = await response.text();
+  const $ = cheerio.load(html);
+  const listings: ListingCandidate[] = [];
+
+  $(".job_seen_beacon, .resultContent").each((_, element) => {
+    const anchor = $(element).find("a.jcs-JobTitle, a.jobTitle").first();
+    const title = anchor.text().trim();
+    const href = normalizeUrl(anchor.attr("href") ?? "");
+    const company = $(element).find(".companyName, .company").text().trim();
+    const location = $(element).find(".companyLocation, .location").text().trim();
+    if (!title || !href) return;
+    const description = summarizeToLine($(element).find(".job-snippet, .summary").text().trim(), 1000);
+    const fullUrl = href.startsWith("/") ? `https://de.indeed.com${href}` : href;
+    listings.push({
+      lane: source.lane,
+      externalId: fullUrl,
+      title,
+      titleFamily: "",
+      company,
+      location,
+      country: /berlin|germany|deutschland/i.test(location) ? "Germany" : "",
+      language: "de",
+      workModel: inferWorkModel(`${title} ${description} ${location}`),
+      employmentType: inferEmploymentType(description),
+      salary: "",
+      description,
+      url: fullUrl,
+      applyUrl: fullUrl,
+      source: source.name,
+      sourceType: "job_board",
+      sourceUrls: uniqueNonEmpty([fullUrl]),
+      companyUrl: "",
+      careersUrl: "",
+      aboutUrl: "",
+      teamUrl: "",
+      contactUrl: "",
+      pressUrl: "",
+      companyLinkedinUrl: "",
+      publicContacts: [],
+      postedAt: $(element).find(".date").text().trim(),
+      validThrough: "",
+      department: "",
+      experienceYearsText: "",
+      remoteScope: inferWorkModel(`${title} ${description} ${location}`) === "remote" ? "global" : "",
+      applicantLocationRequirements: [],
+      applicationContactName: "",
+      applicationContactEmail: "",
+      parseConfidence: 0.6,
+      sourceConfidence: 0.62,
+      isRealJobPage: true,
+      raw: { provider: "indeed" },
+    });
+  });
+
+  return listings.slice(0, maxResults);
+}
+
 export async function discoverFromJobBoard(
   source: JobBoardSource,
   deps: Dependencies,
@@ -201,6 +466,22 @@ export async function discoverFromJobBoard(
     }
     const html = await response.text();
     return parseLinkedInListings(html, source).slice(0, maxResults);
+  }
+
+  if (source.provider === "yc_jobs") {
+    return fetchYCJobs(source, deps, config);
+  }
+
+  if (source.provider === "remoteok") {
+    return fetchRemoteOK(source, deps, config);
+  }
+
+  if (source.provider === "stepstone") {
+    return fetchStepStone(source, deps, config);
+  }
+
+  if (source.provider === "indeed") {
+    return fetchIndeed(source, deps, config);
   }
 
   const googleQuery = `${query} jobs near ${location}`.trim();

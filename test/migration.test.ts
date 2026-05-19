@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import { openDatabase, upsertCompany, upsertJob, upsertPageCache } from "../src/db.js";
-import { loadConfig } from "../src/config.js";
+import { openDatabase, upsertCompany, upsertJob, upsertPageCache } from "../src/state/db.js";
+import { loadConfig } from "../src/normalization/config.js";
 import { makeTempDir } from "./helpers.js";
 
 describe("legacy migration", () => {

@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDatabase } from "../src/db.js";
-import { createJobsService } from "../src/services/jobs-service.js";
-import { createRunService } from "../src/services/run-service.js";
-import { onboardProfile } from "../src/profile.js";
+import { openDatabase } from "../src/state/db.js";
+import { createJobsService } from "../src/state/services/jobs-service.js";
+import { createRunService } from "../src/state/services/run-service.js";
+import { onboardProfile } from "../src/normalization/profile.js";
 import { makeFetchStub, makeTempDir } from "./helpers.js";
 
 describe("foundation services", () => {

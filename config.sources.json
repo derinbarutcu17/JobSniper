@@ -1,0 +1,154 @@
+{
+  "rss": [
+    {
+      "name": "Berlin Startup Jobs Design",
+      "url": "https://berlinstartupjobs.com/design/feed/"
+    },
+    {
+      "name": "Berlin Startup Jobs Engineering",
+      "url": "https://berlinstartupjobs.com/engineering/feed/"
+    }
+  ],
+  "atsBoards": [
+    {
+      "name": "Wellfound Berlin Startups",
+      "provider": "wellfound",
+      "url": "https://wellfound.com/startups/location/berlin-berlin",
+      "lane": "company_watch"
+    },
+    {
+      "name": "Wellfound Berlin Design Jobs",
+      "provider": "wellfound",
+      "url": "https://wellfound.com/location/berlin-berlin",
+      "lane": "design_jobs"
+    },
+    {
+      "name": "Wellfound Berlin AI / Engineering Jobs",
+      "provider": "wellfound",
+      "url": "https://wellfound.com/location/berlin-berlin",
+      "lane": "ai_coding_jobs"
+    },
+    {
+      "name": "Wellfound Berlin Student Jobs",
+      "provider": "wellfound",
+      "url": "https://wellfound.com/location/berlin-berlin",
+      "lane": "student_jobs"
+    }
+  ],
+  "jobBoards": [
+    {
+      "name": "LinkedIn Berlin Design",
+      "provider": "linkedin",
+      "lane": "design_jobs",
+      "location": "Berlin, Germany",
+      "maxResults": 25
+    },
+    {
+      "name": "LinkedIn Berlin AI",
+      "provider": "linkedin",
+      "lane": "ai_coding_jobs",
+      "location": "Berlin, Germany",
+      "maxResults": 25
+    },
+    {
+      "name": "LinkedIn Berlin Student",
+      "provider": "linkedin",
+      "lane": "student_jobs",
+      "location": "Berlin, Germany",
+      "maxResults": 25
+    },
+    {
+      "name": "Google Jobs Berlin Design",
+      "provider": "google_jobs",
+      "lane": "design_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "Google Jobs Berlin AI",
+      "provider": "google_jobs",
+      "lane": "ai_coding_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "Google Jobs Berlin Student",
+      "provider": "google_jobs",
+      "lane": "student_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "YC Jobs Design",
+      "provider": "yc_jobs",
+      "lane": "design_jobs",
+      "maxResults": 10
+    },
+    {
+      "name": "YC Jobs AI",
+      "provider": "yc_jobs",
+      "lane": "ai_coding_jobs",
+      "maxResults": 10
+    },
+    {
+      "name": "YC Jobs Student",
+      "provider": "yc_jobs",
+      "lane": "student_jobs",
+      "maxResults": 10
+    },
+    {
+      "name": "RemoteOK Design",
+      "provider": "remoteok",
+      "lane": "design_jobs",
+      "maxResults": 10
+    },
+    {
+      "name": "RemoteOK AI",
+      "provider": "remoteok",
+      "lane": "ai_coding_jobs",
+      "maxResults": 10
+    },
+    {
+      "name": "StepStone Berlin Design",
+      "provider": "stepstone",
+      "lane": "design_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "StepStone Berlin AI",
+      "provider": "stepstone",
+      "lane": "ai_coding_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "StepStone Berlin Student",
+      "provider": "stepstone",
+      "lane": "student_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "Indeed Berlin Design",
+      "provider": "indeed",
+      "lane": "design_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "Indeed Berlin AI",
+      "provider": "indeed",
+      "lane": "ai_coding_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    },
+    {
+      "name": "Indeed Berlin Student",
+      "provider": "indeed",
+      "lane": "student_jobs",
+      "location": "Berlin",
+      "maxResults": 10
+    }
+  ]
+}

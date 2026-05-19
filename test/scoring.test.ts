@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
-import { scoreListing } from "../src/scoring.js";
-import { buildQueries } from "../src/search/queries.js";
+import { loadConfig } from "../src/normalization/config.js";
+import { scoreListing } from "../src/normalization/scoring.js";
+import { buildQueries } from "../src/ingestion/search/queries.js";
 import type { ListingCandidate, ProfileSummary } from "../src/types.js";
 import { makeTempDir } from "./helpers.js";
 

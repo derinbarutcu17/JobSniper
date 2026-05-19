@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferPitch } from "../src/pitch.js";
+import { inferPitch } from "../src/normalization/pitch.js";
 import type { ListingCandidate, ProfileSummary } from "../src/types.js";
 
 describe("pitch generation", () => {

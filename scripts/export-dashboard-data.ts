@@ -2,10 +2,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig } from "../src/config.js";
-import { getStoredSpreadsheetId, openDatabase } from "../src/db.js";
-import { buildCompanyOutreachSnapshots } from "../src/outreach-state.js";
-import { resolveCompanyBestContact } from "../src/company-enrich.js";
+import { loadConfig } from "../src/normalization/config.js";
+import { getStoredSpreadsheetId, openDatabase } from "../src/state/db.js";
+import { buildCompanyOutreachSnapshots } from "../src/state/outreach-state.js";
+import { resolveCompanyBestContact } from "../src/ingestion/company-enrich.js";
 import { isEmail, isPlaceholderEmail, isWeakOutreachEmail, scoreContactCandidate } from "../src/normalization/contact-quality.js";
 
 type JsonRecord = Record<string, unknown>;

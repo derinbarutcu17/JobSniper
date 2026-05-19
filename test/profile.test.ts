@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deriveProfileSummary, onboardProfile } from "../src/profile.js";
+import { deriveProfileSummary, onboardProfile } from "../src/normalization/profile.js";
 import { makeTempDir } from "./helpers.js";
 
 afterEach(() => {

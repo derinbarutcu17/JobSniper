@@ -89,6 +89,12 @@ export const defaultConfig: SniperConfig = {
   },
 };
 
+const CONFIG_PARTS = [
+  "config.lanes.json",
+  "config.sources.json",
+  "config.tomorrow.json",
+] as const;
+
 function mergeLane(base: LaneConfig | undefined, override?: Partial<LaneConfig>): LaneConfig {
   return {
     label: override?.label ?? base?.label ?? "Custom Lane",
@@ -363,26 +369,45 @@ function normalizeModernConfig(parsed: Record<string, unknown>): ConfigOverrides
   };
 }
 
+function loadJsonIfPresent<T>(filePath: string): T | undefined {
+  if (!fs.existsSync(filePath)) {
+    return undefined;
+  }
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
+}
+
 export function loadConfig(baseDir: string): SniperConfig {
   const configPath = path.join(baseDir, "config.json");
-  if (!fs.existsSync(configPath)) {
-    return validateConfig(defaultConfig);
+  const parsed = loadJsonIfPresent<Record<string, unknown>>(configPath);
+  const looksModern =
+    parsed
+      ? (typeof parsed.lanes === "object" && parsed.lanes !== null) ||
+        (typeof parsed.sources === "object" && parsed.sources !== null) ||
+        (typeof parsed.sheets === "object" && parsed.sheets !== null) ||
+        (typeof parsed.blacklist === "object" && parsed.blacklist !== null)
+      : true;
+
+  let config = parsed
+    ? sanitizeConfig(
+        looksModern
+          ? mergeConfig(defaultConfig, normalizeModernConfig(parsed))
+          : mergeConfig(defaultConfig, migrateLegacyConfig(parsed)),
+      )
+    : validateConfig(defaultConfig);
+
+  for (const partName of CONFIG_PARTS) {
+    const partPath = path.join(baseDir, partName);
+    const part = loadJsonIfPresent<Record<string, unknown>>(partPath);
+    if (!part) continue;
+    const merged = partName === "config.lanes.json"
+      ? mergeConfig(config, normalizeModernConfig({ lanes: part as ConfigOverrides["lanes"] }))
+      : partName === "config.sources.json"
+        ? mergeConfig(config, { sources: part as ConfigOverrides["sources"] })
+        : mergeConfig(config, { tomorrow: part as ConfigOverrides["tomorrow"] });
+    config = sanitizeConfig(merged);
   }
 
-  const parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
-  const looksModern =
-    (typeof parsed.lanes === "object" && parsed.lanes !== null) ||
-    (typeof parsed.sources === "object" && parsed.sources !== null) ||
-    (typeof parsed.sheets === "object" && parsed.sheets !== null) ||
-    (typeof parsed.blacklist === "object" && parsed.blacklist !== null);
-
-  return validateConfig(
-    sanitizeConfig(
-      looksModern
-        ? mergeConfig(defaultConfig, normalizeModernConfig(parsed))
-        : mergeConfig(defaultConfig, migrateLegacyConfig(parsed)),
-    ),
-  );
+  return validateConfig(config);
 }
 
 export function saveConfig(baseDir: string, config: SniperConfig): void {

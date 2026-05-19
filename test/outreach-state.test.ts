@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDatabase, updateJobPipelineFields, upsertApplication } from "../src/db.js";
-import { buildCompanyOutreachSnapshots } from "../src/outreach-state.js";
-import { createOutreachStatusService } from "../src/services/outreach-status-service.js";
+import { openDatabase, updateJobPipelineFields, upsertApplication } from "../src/state/db.js";
+import { buildCompanyOutreachSnapshots } from "../src/state/outreach-state.js";
+import { createOutreachStatusService } from "../src/state/services/outreach-status-service.js";
 import { generateDashboardData } from "../scripts/export-dashboard-data.js";
 import { makeTempDir } from "./helpers.js";
 

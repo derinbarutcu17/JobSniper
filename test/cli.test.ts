@@ -2,8 +2,8 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDatabase } from "../src/db.js";
-import { runCli } from "../src/cli.js";
+import { openDatabase } from "../src/state/db.js";
+import { runCli } from "../src/presentation/cli.js";
 import { makeTempDir } from "./helpers.js";
 
 describe("cli", () => {
@@ -28,7 +28,7 @@ describe("cli", () => {
   });
 
   it("executes through the shell wrapper and prints help", () => {
-    const result = spawnSync("node", ["./scripts/run-sniper.mjs", "help"], {
+    const result = spawnSync("node", ["--import", "tsx", "./scripts/run-sniper.mjs", "help"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });
@@ -37,7 +37,7 @@ describe("cli", () => {
   });
 
   it("fails through the shell wrapper for unknown commands", () => {
-    const result = spawnSync("node", ["./scripts/run-sniper.mjs", "nonsense"], {
+    const result = spawnSync("node", ["--import", "tsx", "./scripts/run-sniper.mjs", "nonsense"], {
       cwd: process.cwd(),
       encoding: "utf8",
     });

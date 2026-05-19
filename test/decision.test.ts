@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDecisionSnapshot } from "../src/decision.js";
+import { buildDecisionSnapshot } from "../src/normalization/decision.js";
 import type { ListingCandidate, ProfileSummary, ScoreBreakdown } from "../src/types.js";
 
 const profile: ProfileSummary = {

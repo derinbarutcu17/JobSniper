@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferRoute } from "../src/route.js";
+import { inferRoute } from "../src/normalization/route.js";
 import type { ListingCandidate } from "../src/types.js";
 
 function listing(partial: Partial<ListingCandidate> = {}): ListingCandidate {

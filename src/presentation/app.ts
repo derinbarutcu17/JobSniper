@@ -287,5 +287,113 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       const result = await sheetSyncService.pull();
       return `Pulled ${result.pulled} rows from spreadsheet ${result.spreadsheetId}.`;
     },
+
+    async daily(limit = 10) {
+      const { db } = openDatabase(baseDir);
+
+      const topJobs = db.prepare(
+        "SELECT id, title, company_name, score, recommendation, recommended_route, url, pipeline_status, location, work_model, lane FROM jobs WHERE recommendation IN ('apply_now', 'cold_email') AND pipeline_status NOT IN ('applied', 'contacted', 'rejected', 'archived') ORDER BY score DESC, created_at DESC LIMIT ?"
+      ).all(limit) as Array<Record<string, unknown>>;
+
+      const topCompanies = db.prepare(
+        "SELECT c.id, c.name, c.domain, c.startup_score, c.contactability_score, c.company_url, c.careers_url, c.team_url, cos.status as outreach_status, cos.last_contact_channel FROM companies c LEFT JOIN company_outreach_state cos ON c.id = cos.company_id WHERE c.startup_score > 0 OR c.contactability_score > 0 ORDER BY c.startup_score DESC, c.contactability_score DESC LIMIT ?"
+      ).all(limit) as Array<Record<string, unknown>>;
+
+      const contactedCompanies = db.prepare(
+        "SELECT c.name, c.domain, cos.status, cos.last_contact_channel, cos.updated_at FROM companies c JOIN company_outreach_state cos ON c.id = cos.company_id WHERE cos.status IN ('reached', 'sent_email', 'talking', 'applied') ORDER BY cos.updated_at DESC"
+      ).all() as Array<Record<string, unknown>>;
+
+      const appliedJobs = db.prepare(
+        "SELECT title, company_name, pipeline_status, applied_at FROM jobs WHERE pipeline_status IN ('applied', 'contacted') ORDER BY applied_at DESC LIMIT 10"
+      ).all() as Array<Record<string, unknown>>;
+
+      const lines = [];
+      lines.push("=== Daily Job Sniper Digest ===");
+      lines.push("Generated: " + new Date().toLocaleDateString());
+      lines.push("");
+
+      lines.push("--- Top " + topJobs.length + " Jobs to Act On ---");
+      if (topJobs.length === 0) {
+        lines.push("No new actionable jobs. Run 'sniper run' to discover more.");
+      } else {
+        for (const job of topJobs) {
+          const rec = String(job.recommendation || "");
+          const route = String(job.recommended_route || "");
+          const icon = rec === "apply_now" ? "[APPLY]" : "[EMAIL]";
+          lines.push(icon + " " + String(job.title || "") + " at " + String(job.company_name || ""));
+          lines.push("  Score: " + job.score + " | " + String(job.location || "") + " " + String(job.work_model || ""));
+          lines.push("  Route: " + route + " | " + String(job.url || ""));
+          lines.push("");
+        }
+      }
+
+      lines.push("--- Top " + topCompanies.length + " Companies to Cold Email ---");
+      if (topCompanies.length === 0) {
+        lines.push("No new company targets. Run 'sniper run --company-watch' to discover more.");
+      } else {
+        for (const company of topCompanies) {
+          const status = String(company.outreach_status || "new");
+          if (["reached", "sent_email", "talking", "applied"].includes(status)) continue;
+          lines.push("[EMAIL] " + String(company.name || "") + " (" + String(company.domain || "") + ")");
+          lines.push("  Startup score: " + company.startup_score + " | Contact score: " + company.contactability_score);
+          if (company.careers_url) lines.push("  Careers: " + company.careers_url);
+          if (company.team_url) lines.push("  Team: " + company.team_url);
+          lines.push("");
+        }
+      }
+
+      lines.push("--- Already Contacted (No Duplicates) ---");
+      if (contactedCompanies.length === 0) {
+        lines.push("No companies contacted yet.");
+      } else {
+        for (const c of contactedCompanies) {
+          lines.push("  " + String(c.name || "") + " (" + String(c.domain || "") + ") - " + c.status + (c.last_contact_channel ? " via " + c.last_contact_channel : ""));
+        }
+      }
+
+      lines.push("");
+      lines.push("--- Recently Applied ---");
+      if (appliedJobs.length === 0) {
+        lines.push("No applications sent yet.");
+      } else {
+        for (const j of appliedJobs) {
+          lines.push("  " + String(j.title || "") + " at " + String(j.company_name || "") + " - " + j.pipeline_status + (j.applied_at ? " (" + j.applied_at + ")" : ""));
+        }
+      }
+
+      return lines.join("\n");
+    },
+
+    snap(input: { type: string; ref: string; status?: string; method?: string; note?: string }) {
+      const { db } = openDatabase(baseDir);
+
+      if (input.type === "job") {
+        const jobId = Number(input.ref);
+        if (!Number.isFinite(jobId)) {
+          throw new Error("snap job requires a numeric job ID");
+        }
+        const status = input.status || "applied";
+        const method = input.method || "ats";
+        const note = input.note || "";
+        db.prepare("UPDATE jobs SET pipeline_status = ?, applied_at = COALESCE(applied_at, datetime('now')), application_method = ?, updated_at = datetime('now') WHERE id = ?").run(status, method, jobId);
+        return "Job " + jobId + " marked as " + status + " via " + method + (note ? ". Note: " + note : "");
+      }
+
+      const companyRef = input.ref;
+      const status = input.status || "reached";
+      const channel = input.method || "email";
+      const note = input.note || "";
+
+      const existing = db.prepare("SELECT id FROM companies WHERE canonical_key = ? OR name = ?").get(companyRef, companyRef) as { id: number } | undefined;
+      if (!existing) {
+        throw new Error("Company not found: " + companyRef);
+      }
+
+      db.prepare("INSERT OR REPLACE INTO company_outreach_state (company_id, status, last_contact_channel, note, source, updated_at) VALUES (?, ?, ?, ?, 'snap', datetime('now'))").run(
+        existing.id, status, channel, note
+      );
+      return "Company " + companyRef + " marked as " + status + " via " + channel + (note ? ". Note: " + note : "");
+    },
   };
 }
+

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCompanyDecisionSnapshot, renderCompanyDossier } from "../src/company-dossier.js";
+import { buildCompanyDecisionSnapshot, renderCompanyDossier } from "../src/presentation/company-dossier.js";
 
 describe("company dossier", () => {
   it("summarizes route, priority, and roles", () => {

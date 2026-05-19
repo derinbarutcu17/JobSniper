@@ -82,7 +82,7 @@ export interface AtsBoardSource {
 
 export interface JobBoardSource {
   name: string;
-  provider: "linkedin" | "google_jobs";
+  provider: "linkedin" | "google_jobs" | "yc_jobs" | "remoteok" | "stepstone" | "indeed";
   lane: LaneId;
   query?: string;
   location?: string;

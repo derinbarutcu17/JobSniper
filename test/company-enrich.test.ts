@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { enrichCompanyFromWeb, resolveCompanyBestContact } from "../src/company-enrich.js";
+import { enrichCompanyFromWeb, resolveCompanyBestContact } from "../src/ingestion/company-enrich.js";
 import { makeFetchStub } from "./helpers.js";
 
 describe("company enrichment", () => {

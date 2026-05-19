@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { summarizeExperiments } from "../src/experiments.js";
-import { openDatabase } from "../src/db.js";
-import { logContactAttempt, logOutcome } from "../src/contact-log.js";
+import { summarizeExperiments } from "../src/state/experiments.js";
+import { openDatabase } from "../src/state/db.js";
+import { logContactAttempt, logOutcome } from "../src/state/contact-log.js";
 import { makeTempDir } from "./helpers.js";
 
 describe("outcome logging", () => {

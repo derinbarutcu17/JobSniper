@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { loadConfig } from "../src/normalization/config.js";
 import { earlyFilterListing } from "../src/normalization/listing-filter.js";
 import type { ListingCandidate, ProfileSummary } from "../src/types.js";
 import { makeTempDir } from "./helpers.js";

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { loadConfig } from "../src/normalization/config.js";
 import { makeTempDir } from "./helpers.js";
 
 describe("config validation", () => {
@@ -20,6 +20,36 @@ describe("config validation", () => {
       config.lanes.company_watch.queries.en.some((query) => /startupberlin|ai\.berlin|startups-list|seedtable|handpickedberlin/i.test(query)),
     ).toBe(true);
     expect(config.lanes.company_watch.companyTerms).toContain("Berlin");
+  });
+
+  it("merges config fragments from sidecar files", () => {
+    const baseDir = makeTempDir();
+    fs.writeFileSync(
+      path.join(baseDir, "config.lanes.json"),
+      JSON.stringify(
+        {
+          design_jobs: {
+            label: "Design Jobs (Alt)",
+            type: "job",
+            enabled: true,
+            queries: { en: ["Berlin design engineer jobs"], tr: [] },
+            keywords: ["design engineer"],
+            queryTerms: ["design engineer"],
+            profileSignals: ["design"],
+            titleFamilies: [{ family: "Design Engineer", terms: ["design engineer"] }],
+            mismatchTerms: [],
+            startupTerms: [],
+            companyTerms: [],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const config = loadConfig(baseDir);
+    expect(config.lanes.design_jobs.label).toBe("Design Jobs (Alt)");
+    expect(config.lanes.design_jobs.queries.en).toContain("Berlin design engineer jobs");
   });
 
   it("rejects enabled lanes with no queries or keywords", () => {
