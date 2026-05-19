@@ -288,10 +288,7 @@ Current deployment flow:
 2. run `npm run live:sync`
 3. run `npm run live:deploy` when you want production updated
 
-Generated status artifacts now include:
-
-- `dashboard/data/outreach-status.json`
-- `dashboard/data/outreach-status.md`
+Generated status artifacts are produced locally when you run export/sync commands and are not committed to the repo.
 
 ## Google Sheets
 
@@ -386,21 +383,21 @@ Secrets should come from environment variables, not committed files.
 
 ## Repo Map
 
-- [README.md](/Users/derin/Desktop/CODING/Job%20sniper/README.md)
+- [README.md](./README.md)
   Main project documentation
-- [SKILL.md](/Users/derin/Desktop/CODING/Job%20sniper/SKILL.md)
+- [SKILL.md](./SKILL.md)
   Minimal skill wrapper
-- [docs/STATE-MODEL.md](/Users/derin/Desktop/CODING/Job%20sniper/docs/STATE-MODEL.md)
+- [docs/STATE-MODEL.md](./docs/STATE-MODEL.md)
   State ownership and sync model
-- [docs/CLEANUP-PHASES.md](/Users/derin/Desktop/CODING/Job%20sniper/docs/CLEANUP-PHASES.md)
+- [docs/CLEANUP-PHASES.md](./docs/CLEANUP-PHASES.md)
   Cleanup and anti-bloat notes
-- [src/ingestion](/Users/derin/Desktop/CODING/Job%20sniper/src/ingestion)
+- [src/ingestion](./src/ingestion)
   Scraping and discovery
-- [src/normalization](/Users/derin/Desktop/CODING/Job%20sniper/src/normalization)
+- [src/normalization](./src/normalization)
   Filtering, scoring, routing, judgment
-- [src/state](/Users/derin/Desktop/CODING/Job%20sniper/src/state)
+- [src/state](./src/state)
   SQLite, services, sync state
-- [src/presentation](/Users/derin/Desktop/CODING/Job%20sniper/src/presentation)
+- [src/presentation](./src/presentation)
   CLI and presenter layer
-- [test](/Users/derin/Desktop/CODING/Job%20sniper/test)
+- [test](./test)
   Regression, parser, and service coverage

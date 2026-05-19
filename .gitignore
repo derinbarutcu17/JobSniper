@@ -2,6 +2,8 @@ node_modules
 archive/
 data/
 !dashboard/data/
+dashboard/data/*.json
+dashboard/data/*.md
 .DS_Store
 data/reports/
 data/*.db

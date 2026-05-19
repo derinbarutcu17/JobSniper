@@ -26,15 +26,6 @@ Repo root:
 
 - the parent directory of `scripts/hermes-daily-run.sh`
 
-## Hermes-local paths
-
-Known Hermes locations:
-
-- config: `~/.hermes/config.yaml`
-- env: `~/.hermes/.env`
-- repo: `~/.hermes/hermes-agent/`
-- skills: `~/.hermes/skills/`
-
 ## Required environment
 
 The Job Sniper runtime should have access to:
@@ -56,7 +47,7 @@ If cron launches the job directly, make sure the script exports them or sources 
 Run once:
 
 ```bash
-cd "/absolute/path/to/this/repo"
+cd "/path/to/job-sniper-repo"
 npm install
 npm run typecheck
 npm test
@@ -206,8 +197,8 @@ Reason:
 Example:
 
 ```cron
-0 9 * * * /bin/zsh "/absolute/path/to/this/repo/scripts/hermes-daily-run.sh" >> "/absolute/path/to/this/repo/data/cron.log" 2>&1
-30 16 * * * /bin/zsh "/absolute/path/to/this/repo/scripts/hermes-daily-run.sh" >> "/absolute/path/to/this/repo/data/cron.log" 2>&1
+0 9 * * * /bin/zsh "/path/to/job-sniper-repo/scripts/hermes-daily-run.sh" >> "/path/to/job-sniper-repo/data/cron.log" 2>&1
+30 16 * * * /bin/zsh "/path/to/job-sniper-repo/scripts/hermes-daily-run.sh" >> "/path/to/job-sniper-repo/data/cron.log" 2>&1
 ```
 
 ## Recommended cron wrapper behavior

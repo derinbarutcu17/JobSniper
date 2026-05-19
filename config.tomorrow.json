@@ -13,31 +13,5 @@
     "\"Berlin\" \"Product Engineer\" startup",
     "\"Berlin\" \"Product Designer\" startup"
   ],
-  "curatedCompanies": [
-    {
-      "company": "Langdock",
-      "query": "Langdock Design Engineer Berlin",
-      "roleHint": "Design Engineer"
-    },
-    {
-      "company": "Kombo",
-      "query": "Kombo AI Product Engineer Berlin",
-      "roleHint": "AI Product Engineer"
-    },
-    {
-      "company": "&why",
-      "query": "&why Frontend Design Engineer Berlin",
-      "roleHint": "Frontend & Design Engineer"
-    },
-    {
-      "company": "Ecosia",
-      "query": "Ecosia Product Designer Berlin jobs",
-      "roleHint": "Product Designer"
-    },
-    {
-      "company": "Bliq",
-      "query": "Bliq Product Designer Berlin startup jobs",
-      "roleHint": "Product Designer"
-    }
-  ]
+  "curatedCompanies": []
 }

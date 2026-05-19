@@ -710,80 +710,6 @@ async function discoverCuratedApplications(profile: TomorrowProfileSignals, cura
   return output;
 }
 
-async function discoverPinnedApplications(profile: TomorrowProfileSignals): Promise<TomorrowApplicationTarget[]> {
-  const pinned: Array<{
-    company: string;
-    url: string;
-    roleHint: string;
-    fallbackLocation: string;
-    fallbackText: string;
-  }> = [
-    {
-      company: "Langdock",
-      url: "https://de.linkedin.com/jobs/view/design-engineer-at-langdock-4404338675",
-      roleHint: "Design Engineer",
-      fallbackLocation: "Berlin",
-      fallbackText: "Design Engineer Berlin product design engineering AI collaboration apply",
-    },
-    {
-      company: "Kombo",
-      url: "https://jobs.ashbyhq.com/Kombo/ee1b90f2-45c6-44db-acbb-edc099a8968b",
-      roleHint: "Product Engineer (Full Stack)",
-      fallbackLocation: "Berlin",
-      fallbackText: "Product engineer full stack Berlin AI product TypeScript customer problems end to end apply",
-    },
-    {
-      company: "&why",
-      url: "https://www.why.de/careers/frontend-engineer/",
-      roleHint: "Frontend & Design Engineer",
-      fallbackLocation: "Berlin",
-      fallbackText: "Frontend design engineer Berlin Next.js React TypeScript motion interactions apply",
-    },
-    {
-      company: "Bliq",
-      url: "https://startup.jobs/product-designer-m-f-d-bliq-7858729",
-      roleHint: "Product Designer (m/f/d)",
-      fallbackLocation: "Berlin",
-      fallbackText: "Product designer Berlin mobility interfaces product systems startup apply",
-    },
-  ];
-
-  const output: TomorrowApplicationTarget[] = [];
-  for (const item of pinned) {
-    let pageTitle = item.roleHint;
-    let text = item.fallbackText;
-    const html = await fetchHtml(item.url).catch(() => "");
-    if (html) {
-      const fetchedTitle = cheerio.load(html)("title").text().trim() || item.roleHint;
-      const fetchedText = htmlToText(html);
-      const cloudflareBlock = /just a moment|enable javascript and cookies to continue/i.test(`${fetchedTitle} ${fetchedText}`);
-      if (!cloudflareBlock) {
-        pageTitle = fetchedTitle;
-        text = fetchedText;
-      }
-    }
-    if (isStaleRolePage(text)) continue;
-    if (!isSpecificRolePage({ url: item.url, title: pageTitle, text })) continue;
-    const location = /berlin/i.test(text) ? "Berlin" : /germany/i.test(text) ? "Germany" : /europe|eu|emea/i.test(text) ? "Europe" : item.fallbackLocation;
-    const score = scoreApplicationFit({ title: pageTitle, location, text, sourceTrust: applicationTrust(item.url), profile });
-    if (score < 20) continue;
-    output.push({
-      company: item.company,
-      role: /sucht/i.test(pageTitle) ? item.roleHint : roleFromPageTitle(pageTitle),
-      whyItFits: buildApplicationReasons({ title: pageTitle, text, location, profile }).join("; "),
-      applicationLink: item.url,
-      urgency: inferUrgency(text),
-      confidence: applicationTrust(item.url) >= 0.8 ? "high" : "medium",
-      whyItBeatAlternatives: "pinned high-fit role",
-      source: "pinned",
-      score: score + 10,
-      evidence: [{ label: "Pinned role page", value: item.url }],
-      nextAction: "Open the role page and apply tomorrow with a tailored note.",
-    });
-  }
-  return output;
-}
-
 function buildDbExclusionSets(baseDir: string): { dbMatches: Set<string>; snapshots: CompanyOutreachSnapshot[] } {
   const { db } = openDatabase(baseDir);
   const snapshots = buildCompanyOutreachSnapshots(db);
@@ -1053,8 +979,7 @@ export function createTomorrowSourcingService(baseDir: string) {
       );
       const applicationExclusions = buildApplicationExclusionSet(baseDir);
 
-      const [pinnedApplications, ashbyApplications, searchApplications, dbCareersApplications, curatedApplications] = await Promise.all([
-        discoverPinnedApplications(profile),
+      const [ashbyApplications, searchApplications, dbCareersApplications, curatedApplications] = await Promise.all([
         discoverAshbyApplications(profile, config.tomorrow.ashbyQueries),
         discoverSearchApplications(profile, config.tomorrow.searchQueries),
         discoverDbCareersApplications(baseDir, profile),
@@ -1095,7 +1020,6 @@ export function createTomorrowSourcingService(baseDir: string) {
         .filter((item): item is TomorrowApplicationTarget => item !== null && Boolean(item.applicationLink));
 
       const applications = dedupeApplications([
-        ...pinnedApplications,
         ...ashbyApplications,
         ...searchApplications,
         ...dbCareersApplications,
