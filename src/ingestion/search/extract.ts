@@ -250,7 +250,7 @@ export function parseJsonLdListings(page: PageRecord, lane: SearchLane, contacts
   return listings;
 }
 
-export function parseCareerHub(page: PageRecord, lane: SearchLane): string[] {
+export function parseCareerHub(page: PageRecord, _lane: SearchLane): string[] {
   const $ = cheerio.load(page.html);
   const jobUrls = new Set<string>();
   const pageDomain = domainFromUrl(page.url);

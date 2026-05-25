@@ -1,4 +1,4 @@
-import { findFirstMatch, includesAny, normalizeText, pickTopSignals } from "../lib/text.js";
+import { findFirstMatch, normalizeText, pickTopSignals } from "../lib/text.js";
 import type { JobDecisionSnapshot, ListingCandidate, PitchTheme, ProfileSummary } from "../types.js";
 
 const DESIGN_TERMS = ["figma", "design systems", "product design", "visual design", "designer", "ux designer", "ui designer"];

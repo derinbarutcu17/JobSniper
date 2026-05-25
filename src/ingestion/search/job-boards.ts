@@ -191,7 +191,6 @@ async function fetchYCJobs(source: JobBoardSource, deps: Dependencies, config: S
     throw new Error(`YC Jobs API fetch failed with ${response.status}`);
   }
   const json = (await response.json()) as { jobs?: Array<Record<string, unknown>> };
-  const query = buildSearchTerm(config, source).toLowerCase();
   const maxResults = source.maxResults ?? config.search.maxResultsPerQuery;
 
   return (json.jobs ?? [])

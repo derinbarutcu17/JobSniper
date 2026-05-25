@@ -4,26 +4,6 @@ import path from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { createTomorrowSourcingService } from "../src/state/services/tomorrow-sourcing-service.js";
 
-vi.mock("playwright-core", () => ({
-  chromium: {
-    launchPersistentContext: vi.fn(async () => {
-      const page = {
-        goto: vi.fn(async () => undefined),
-        waitForTimeout: vi.fn(async () => undefined),
-        url: () => "https://mail.google.com/mail/u/0/#sent",
-        locator: () => ({
-          innerText: vi.fn(async () => "No messages matched your search"),
-        }),
-      };
-      return {
-        pages: () => [page],
-        newPage: async () => page,
-        close: async () => undefined,
-      };
-    }),
-  },
-}));
-
 function makeFetchResponse(body: string, status = 200) {
   return {
     ok: status >= 200 && status < 300,
@@ -83,9 +63,10 @@ describe("tomorrow sourcing service", () => {
     const service = createTomorrowSourcingService(baseDir);
     const result = await service.run({ outputPath, jsonPath, pdfPath });
 
-    expect(result.text).toContain("report-only run ready");
-    expect(result.text).toContain("Top 5 Applications:");
-    expect(result.text).toContain("Top 5 Berlin Startups to Email:");
+    expect(result.text).toBe("");
+    expect(result.report.generatedAt).toBeTruthy();
+    expect(result.report.topApplications).toEqual([]);
+    expect(result.report.topOutreachCompanies).toEqual([]);
     expect(fs.existsSync(outputPath)).toBe(false);
     expect(fs.existsSync(jsonPath)).toBe(false);
     expect(fs.existsSync(pdfPath)).toBe(false);

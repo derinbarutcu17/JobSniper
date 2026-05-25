@@ -1,5 +1,5 @@
 import { includesAny } from "../lib/text.js";
-import type { ContactCandidate, JobDecisionSnapshot, ListingCandidate, ProfileSummary, RecommendedRoute } from "../types.js";
+import type { ContactCandidate, JobDecisionSnapshot, ListingCandidate, RecommendedRoute } from "../types.js";
 
 function hasDirectEmail(contacts: ContactCandidate[]): boolean {
   return contacts.some((contact) => Boolean(contact.email));

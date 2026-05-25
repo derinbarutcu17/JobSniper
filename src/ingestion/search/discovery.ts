@@ -190,7 +190,6 @@ export async function runDiscovery(
 
   const initialCandidates = gathered.candidates.map(classifyCandidate);
   let deduped = gathered.deduped;
-  const queue: DiscoveryCandidate[] = [...initialCandidates];
   const seen = new Set(initialCandidates.map((candidate) => candidate.normalizedUrl));
   const domainBudgets = new Map<string, number>();
 
@@ -212,8 +211,7 @@ export async function runDiscovery(
   let enrichFirstCount = 0;
   let watchCount = 0;
   let discardCount = 0;
-  let directContactCompanies = 0;
-  let founderSurfaceCompanies = 0;
+
   let totalOutreachLeverageScore = 0;
   const directContactCompanyKeys = new Set<string>();
   const founderSurfaceCompanyKeys = new Set<string>();

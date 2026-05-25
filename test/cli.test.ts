@@ -25,6 +25,7 @@ describe("cli", () => {
     const baseDir = makeTempDir();
     expect(await runCli(["sources", "test"], baseDir)).toContain("Search providers");
     expect(await runCli(["stats"], baseDir)).toContain("Jobs:");
+    expect(await runCli(["status"], baseDir)).toContain("Pipeline Status");
   });
 
   it("executes through the shell wrapper and prints help", () => {

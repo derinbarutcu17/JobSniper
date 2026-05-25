@@ -2,7 +2,6 @@ import type { TomorrowApplicationTarget, TomorrowCompanyOutreachTarget, Tomorrow
 
 const SENIOR_TERMS = ["senior", "staff", "principal", "lead", "director", "manager", "head", "vp", "vice president"];
 const STRETCH_TERMS = ["founding", "founder", "co-founder"];
-const PRODUCT_TERMS = ["product", "design", "frontend", "front-end", "full stack", "full-stack", "engineer", "engineering", "ui", "ux", "creative", "ai"];
 const BACKEND_ONLY_TERMS = ["backend", "back-end", "platform", "sre", "devops", "infrastructure", "data engineer"];
 
 export function normalizeCompanyToken(input: string): string {
@@ -24,17 +23,17 @@ function linkDomain(value: string): string {
   return normalizeDomain(value);
 }
 
-export function isSeniorTitle(title: string): boolean {
+function isSeniorTitle(title: string): boolean {
   const lower = title.toLowerCase();
   return SENIOR_TERMS.some((term) => lower.includes(term));
 }
 
-export function isStretchTitle(title: string): boolean {
+function isStretchTitle(title: string): boolean {
   const lower = title.toLowerCase();
   return STRETCH_TERMS.some((term) => lower.includes(term));
 }
 
-export function isBackendHeavyTitle(title: string): boolean {
+function isBackendHeavyTitle(title: string): boolean {
   const lower = title.toLowerCase();
   return BACKEND_ONLY_TERMS.some((term) => lower.includes(term)) && !/(front|design|product|full stack|full-stack)/.test(lower);
 }
@@ -190,19 +189,6 @@ export function dedupeApplications(items: TomorrowApplicationTarget[]): Tomorrow
   const output: TomorrowApplicationTarget[] = [];
   for (const item of rankApplications(items)) {
     const key = `${normalizeCompanyToken(item.company)}|${linkDomain(item.applicationLink)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    output.push(item);
-  }
-  return output;
-}
-
-export function dedupeOutreach(items: TomorrowCompanyOutreachTarget[]): TomorrowCompanyOutreachTarget[] {
-  const seen = new Set<string>();
-  const output: TomorrowCompanyOutreachTarget[] = [];
-  for (const item of rankOutreach(items)) {
-    const routeDomain = linkDomain(item.contactRoute);
-    const key = `${normalizeCompanyToken(item.company)}|${routeDomain}`;
     if (seen.has(key)) continue;
     seen.add(key);
     output.push(item);

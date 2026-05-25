@@ -1,12 +1,12 @@
 import { getJobById, listTopJobs, openDatabase } from "../db.js";
 import { mapJobRecordToDetail, mapJobRecordToSummary } from "../mappers.js";
-import type { JobDetailView, JobListRequest, JobSummary, TriageItem } from "../../types.js";
+import type { JobDetail, JobListRequest, JobSummary, TriageItem } from "../../types.js";
 
 export interface JobsService {
   digest(request?: JobListRequest): JobSummary[];
   shortlist(request?: JobListRequest): JobSummary[];
   triage(request?: JobListRequest): TriageItem[];
-  getJob(jobId: number): JobDetailView | undefined;
+  getJob(jobId: number): JobDetail | undefined;
 }
 
 export function createJobsService(baseDir: string): JobsService {

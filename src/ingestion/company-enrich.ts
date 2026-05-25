@@ -9,7 +9,6 @@ import type {
   CompanyRecordInput,
   ContactCandidate,
   ContactRecordInput,
-  ContactKind,
   Dependencies,
   PitchTheme,
 } from "../types.js";
@@ -30,10 +29,6 @@ const GENERIC_STAGE_LABELS = new Set(["", "startup", "berlin startup list", "sta
 
 function normalizedCompanyDomain(value: string): string {
   return value.toLowerCase().replace(/^www\./i, "");
-}
-
-function emailDomain(value: string): string {
-  return normalizedCompanyDomain(value.split("@")[1] ?? "");
 }
 
 function sortContactsForCompany(companyDomain: string, contacts: ContactCandidate[]): ContactCandidate[] {

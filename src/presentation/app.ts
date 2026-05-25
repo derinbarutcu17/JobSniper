@@ -6,8 +6,6 @@ import { logContactAttempt, logOutcome } from "../state/contact-log.js";
 import {
   enqueueDiscoveryCandidates,
   getCompanyByRef,
-  listCompanies,
-  listContacts,
   openDatabase,
   upsertCompany,
   upsertContact,
@@ -16,13 +14,12 @@ import { draftOutreach } from "./draft.js";
 import { summarizeExperiments } from "../state/experiments.js";
 import { SniperError } from "../errors.js";
 import { createDefaultDependencies } from "../lib/http.js";
-import { canonicalCompanyKey, canonicalContactKey, domainFromUrl, normalizeUrl } from "../lib/url.js";
+import { domainFromUrl, normalizeUrl } from "../lib/url.js";
 import { getDefaultCompanyWatchLane } from "../normalization/role-packs.js";
-import { buildPageRecord, extractContacts } from "../ingestion/search/extract.js";
 import { getSearchProviders } from "../ingestion/search/web.js";
 import type { SheetGateway } from "../state/sheets.js";
 import type { Dependencies, SearchLane } from "../types.js";
-import { presentCompanies, presentContacts, presentDossier, presentJobDetail, presentJobList, presentPipelineResult, presentRunResult, presentStats, presentTomorrowSourcing, presentTriage } from "./presenters.js";
+import { presentCompanies, presentContacts, presentDossier, presentJobDetail, presentJobList, presentPipelineResult, presentRunResult, presentStats, presentStatus, presentTomorrowSourcing, presentTriage } from "./presenters.js";
 import { createCompaniesService } from "../state/services/companies-service.js";
 import { createContactsService } from "../state/services/contacts-service.js";
 import { createJobsService } from "../state/services/jobs-service.js";
@@ -33,18 +30,13 @@ import { createSheetSyncService } from "../state/services/sheet-sync-service.js"
 import { createStatsService } from "../state/services/stats-service.js";
 import { createOutreachStatusService } from "../state/services/outreach-status-service.js";
 import { createTomorrowSourcingService } from "../state/services/tomorrow-sourcing-service.js";
+import { runDailyQueue } from "../state/services/daily-queue-service.js";
+import { writeDailyArtifacts } from "./daily-report.js";
+import type { DailyAutomationOptions } from "../types.js";
 
 export interface AppDependencies {
   deps?: Dependencies;
   sheetGateway?: SheetGateway;
-}
-
-function parseCompanyRef(input: string): { id?: number; key?: string } {
-  const maybeId = Number(input);
-  if (Number.isFinite(maybeId)) {
-    return { id: maybeId };
-  }
-  return { key: input.trim() };
 }
 
 async function enrichCompanyRecord(baseDir: string, deps: Dependencies, companyRef: string): Promise<string> {
@@ -248,6 +240,10 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       return presentStats(statsService.get());
     },
 
+    status() {
+      return presentStatus(statsService.get());
+    },
+
     async sourceTomorrow(options: { outputPath?: string; jsonPath?: string; pdfPath?: string } = {}) {
       return presentTomorrowSourcing(await tomorrowSourcingService.run(options));
     },
@@ -364,6 +360,24 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       return lines.join("\n");
     },
 
+    async automateDaily(options: DailyAutomationOptions = {}) {
+      const result = await runDailyQueue(baseDir, deps, {
+        limitJobs: options.limitJobs,
+        limitCompanies: options.limitCompanies,
+        dryRun: options.dryRun,
+      });
+      const report = writeDailyArtifacts(baseDir, result);
+      return [
+        `Daily queue complete.`,
+        `Jobs: ${result.jobs.length} | Companies: ${result.companies.length}`,
+        `Excluded: ${Object.values(result.excluded).reduce((a, b) => a + b, 0)}`,
+        ``,
+        `Artifacts:`,
+        `  JSON:  ${report.jsonPath}`,
+        `  Markdown: ${report.markdownPath}`,
+      ].join("\n");
+    },
+
     snap(input: { type: string; ref: string; status?: string; method?: string; note?: string }) {
       const { db } = openDatabase(baseDir);
 
@@ -396,4 +410,3 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
     },
   };
 }
-

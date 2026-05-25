@@ -29,11 +29,39 @@ export function createStatsService(baseDir: string): StatsService {
           AVG(outreach_leverage_score) AS avg_leverage
         FROM jobs
       `).get() as Record<string, unknown>;
+      const companyOutreach = db.prepare(`
+        SELECT
+          SUM(CASE WHEN status = 'reached' THEN 1 ELSE 0 END) AS reached,
+          SUM(CASE WHEN status = 'sent_email' THEN 1 ELSE 0 END) AS sent_email,
+          SUM(CASE WHEN status = 'talking' THEN 1 ELSE 0 END) AS talking,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+          SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END) AS archived
+        FROM company_outreach_state
+      `).get() as Record<string, unknown>;
+      const jobPipeline = db.prepare(`
+        SELECT
+          SUM(CASE WHEN pipeline_status = 'applied' THEN 1 ELSE 0 END) AS applied,
+          SUM(CASE WHEN pipeline_status = 'contacted' THEN 1 ELSE 0 END) AS contacted,
+          SUM(CASE WHEN pipeline_status = 'reply_received' THEN 1 ELSE 0 END) AS reply_received,
+          SUM(CASE WHEN pipeline_status = 'interviewing' THEN 1 ELSE 0 END) AS interviewing
+        FROM jobs
+      `).get() as Record<string, unknown>;
       const latestRun = getLatestRun(db);
       return {
         jobs: { total: counts.jobs, eligible: counts.eligible_jobs },
         companies: counts.companies,
         contacts: counts.contacts,
+        outreach: {
+          reached: Number(companyOutreach.reached ?? 0),
+          sentEmail: Number(companyOutreach.sent_email ?? 0),
+          talking: Number(companyOutreach.talking ?? 0),
+          rejected: Number(companyOutreach.rejected ?? 0),
+          archived: Number(companyOutreach.archived ?? 0),
+          applied: Number(jobPipeline.applied ?? 0),
+          contacted: Number(jobPipeline.contacted ?? 0),
+          replyReceived: Number(jobPipeline.reply_received ?? 0),
+          interviewing: Number(jobPipeline.interviewing ?? 0),
+        },
         strategic: {
           actionable: Number(strategic.actionable ?? 0),
           applyNow: Number(strategic.apply_now ?? 0),

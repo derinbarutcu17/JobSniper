@@ -9,9 +9,7 @@ import type {
   CompanyOutreachStateRecord,
   PipelineStatus,
   OutreachStatus,
-  CompanyDecisionSnapshot,
   CompanyRecordInput,
-  ConfidenceBand,
   ContactCandidate,
   ContactChannel,
   ContactLogEntry,
@@ -927,22 +925,9 @@ function contactabilityFromContacts(contacts: ContactCandidate[]): number {
   return 0;
 }
 
-function confidenceToNumber(band: ConfidenceBand): number {
-  switch (band) {
-    case "high":
-      return 0.95;
-    case "medium":
-      return 0.7;
-    case "low":
-      return 0.45;
-    case "very_low":
-      return 0.2;
-  }
-}
-
 export function upsertJob(
   db: Database.Database,
-  config: SniperConfig,
+  _config: SniperConfig,
   listing: ListingCandidate,
   score: number,
   category: JobRecord["category"],

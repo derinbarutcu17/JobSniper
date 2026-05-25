@@ -419,7 +419,7 @@ export async function crawlUrl(
   sourceType: SourceType,
   provider: string,
   deps: Dependencies,
-  config: SniperConfig = defaultConfig,
+  _config: SniperConfig = defaultConfig,
 ): Promise<CrawlOutcome> {
   const response = await deps.fetch(url);
   if (!response.ok) {

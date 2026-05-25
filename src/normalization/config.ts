@@ -288,7 +288,7 @@ function validateConfig(config: SniperConfig): SniperConfig {
     if (!(board.lane in config.lanes)) {
       throw new SniperError(`Job-board source "${board.name}" references unknown lane "${board.lane}".`, "config_error");
     }
-    if (board.provider !== "linkedin" && board.provider !== "google_jobs") {
+    if (!["linkedin", "google_jobs", "yc_jobs", "remoteok", "stepstone", "indeed"].includes(board.provider)) {
       throw new SniperError(`Job-board source "${board.name}" has unsupported provider "${String(board.provider)}".`, "config_error");
     }
     if (board.maxResults !== undefined && (!Number.isFinite(board.maxResults) || board.maxResults <= 0)) {

@@ -99,6 +99,28 @@ export function presentStats(snapshot: StatsSnapshot): string {
     snapshot.latestRun
       ? `Last run: #${snapshot.latestRun.id} ${snapshot.latestRun.status}`
       : "Last run: none",
+    `Outreach: ${snapshot.outreach.contacted} contacted | ${snapshot.outreach.talking} talking | ${snapshot.outreach.rejected} rejected | ${snapshot.outreach.archived} archived`,
+    `Applications: ${snapshot.outreach.applied} applied | ${snapshot.outreach.interviewing} interviewing`,
+  ].join("\n");
+}
+
+export function presentStatus(snapshot: StatsSnapshot): string {
+  const dateLabel = new Date().toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  return [
+    `Pipeline Status - ${dateLabel}`,
+    "",
+    `  Companies: ${snapshot.companies}  |  Contacts: ${snapshot.contacts}  |  Jobs: ${snapshot.jobs.total} (${snapshot.jobs.eligible} eligible)`,
+    "",
+    `  Outreach:    ${snapshot.outreach.contacted} contacted  ${snapshot.outreach.talking} talking  ${snapshot.outreach.rejected} rejected  ${snapshot.outreach.archived} archived`,
+    `  Applied:     ${snapshot.outreach.applied} applied  ${snapshot.outreach.interviewing} interviewing`,
+    "",
+    `  Actionable:  ${snapshot.strategic.applyNow} apply-now  ${snapshot.strategic.coldEmail} cold-email  ${snapshot.strategic.enrichFirst} enrich-first`,
+    `  Last run:    ${snapshot.latestRun ? `#${snapshot.latestRun.id} ${snapshot.latestRun.status}` : "none"}`,
   ].join("\n");
 }
 

@@ -7,11 +7,9 @@ import {
   buildApplicationReasons,
   buildOutreachReasons,
   dedupeApplications,
-  dedupeOutreach,
   exclusionRecord,
   inferUrgency,
   isBerlinRelevant,
-  isSeniorTitle,
   normalizeCompanyToken,
   normalizeDomain,
   rankApplications,
@@ -30,7 +28,6 @@ import type {
   TomorrowCuratedCompany,
   TomorrowExclusionRecord,
   TomorrowProfileSignals,
-  TomorrowSourcingEvidence,
   TomorrowSourcingGmailMatch,
   TomorrowSourcingOptions,
   TomorrowSourcingReport,
@@ -815,8 +812,7 @@ async function buildOutreachCandidates(baseDir: string, seedMatches: Set<string>
       excluded.push(exclusionRecord(companyName, exclusion.reason || "excluded"));
       continue;
     }
-    const recommendation = safeString(row.recommendation);
-    const route = safeString(row.best_route);
+      const route = safeString(row.best_route);
     const startupScore = safeNumber(row.startup_score);
     const directContactCount = safeNumber(row.direct_contact_count);
     const reachableNow = safeNumber(row.reachable_now) === 1;
@@ -859,112 +855,9 @@ async function buildOutreachCandidates(baseDir: string, seedMatches: Set<string>
   return { items, excluded };
 }
 
-function reportMarkdown(result: TomorrowSourcingResult): string {
-  const lines: string[] = [];
-  lines.push(`# Tomorrow sourcing report`);
-  lines.push(`Generated: ${result.report.generatedAt}`);
-  lines.push(`Gmail audit: ${result.report.gmailAudit.mode || (result.report.gmailAudit.available ? "available" : "unavailable")} (${result.report.gmailAudit.reason})`);
-  if (result.report.dedupeSource) lines.push(`Dedupe source: ${result.report.dedupeSource}`);
-  lines.push("");
-  const pushSection = (title: string, items: Array<TomorrowApplicationTarget | TomorrowCompanyOutreachTarget>) => {
-    lines.push(`## ${title}`);
-    if (!items.length) {
-      lines.push("- none");
-      lines.push("");
-      return;
-    }
-    for (const item of items) {
-      if ("applicationLink" in item) {
-        lines.push(`- ${item.company} — ${item.role}`);
-        lines.push(`  Why it fits: ${item.whyItFits}`);
-        lines.push(`  Application link: ${item.applicationLink}`);
-        lines.push(`  Urgency: ${item.urgency}`);
-        lines.push(`  Confidence: ${item.confidence}`);
-        lines.push(`  Next action tomorrow: ${item.nextAction}`);
-      } else {
-        lines.push(`- ${item.company}`);
-        lines.push(`  Why it fits: ${item.whyItFits}`);
-        lines.push(`  Target type: ${item.targetType || item.whoToAddress}`);
-        lines.push(`  Contact route: ${item.contactRoute}`);
-        lines.push(`  Contact status: ${item.contactStatus || "unknown"}`);
-        lines.push(`  Freshness: ${item.whyItIsFresh}`);
-        lines.push(`  Confidence: ${item.contactConfidence}`);
-        lines.push(`  Next action tomorrow: ${item.nextAction}`);
-      }
-    }
-    lines.push("");
-  };
-  pushSection("Top 5 Applications", result.report.topApplications);
-  pushSection("Top 5 Berlin Startups to Email", result.report.topOutreachCompanies);
-  pushSection("Reserve Applications", result.report.reserveApplications);
-  pushSection("Reserve Startups", result.report.reserveOutreachCompanies);
-  lines.push("## Excluded Because Already Contacted");
-  if (result.report.excludedAlreadyContacted.length) {
-    for (const item of result.report.excludedAlreadyContacted.slice(0, 20)) {
-      lines.push(`- ${item.company} — ${item.reason}`);
-    }
-  } else {
-    lines.push("- none");
-  }
-  lines.push("");
-  lines.push("## Excluded Because Not Good Enough");
-  if (result.report.excludedNotGoodEnough.length) {
-    for (const item of result.report.excludedNotGoodEnough.slice(0, 20)) {
-      lines.push(`- ${item.company} — ${item.reason}`);
-    }
-  } else {
-    lines.push("- none");
-  }
-  lines.push("");
-  return lines.join("\n");
-}
-
-function reportText(result: TomorrowSourcingResult): string {
-  const lines: string[] = [];
-  lines.push(`Tomorrow sourcing report-only run ready. Applications ${result.report.topApplications.length}, outreach ${result.report.topOutreachCompanies.length}.`);
-  lines.push(`Gmail audit: ${result.report.gmailAudit.mode || (result.report.gmailAudit.available ? "available" : "unavailable")} (${result.report.gmailAudit.reason})`);
-  if (result.report.dedupeSource) lines.push(`Dedupe source: ${result.report.dedupeSource}`);
-  lines.push("");
-  lines.push("Top 5 Applications:");
-  for (const item of result.report.topApplications) {
-    lines.push(`- ${item.company} | ${item.role} | ${item.urgency} | ${item.confidence} | ${item.applicationLink}`);
-    lines.push(`  Why it fits: ${item.whyItFits}`);
-    lines.push(`  Next action tomorrow: ${item.nextAction}`);
-  }
-  lines.push("");
-  lines.push("Top 5 Berlin Startups to Email:");
-  for (const item of result.report.topOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactStatus || "unknown"} | ${item.contactRoute}`);
-    lines.push(`  Why it fits: ${item.whyItFits}`);
-    lines.push(`  Freshness: ${item.whyItIsFresh}`);
-    lines.push(`  Next action tomorrow: ${item.nextAction}`);
-  }
-  lines.push("");
-  lines.push("Reserve Applications:");
-  for (const item of result.report.reserveApplications) {
-    lines.push(`- ${item.company} | ${item.role} | ${item.urgency} | ${item.confidence} | ${item.applicationLink}`);
-  }
-  lines.push("");
-  lines.push("Reserve Startups:");
-  for (const item of result.report.reserveOutreachCompanies) {
-    lines.push(`- ${item.company} | ${item.targetType || item.whoToAddress} | ${item.contactConfidence} | ${item.contactStatus || "unknown"} | ${item.contactRoute}`);
-  }
-  lines.push("");
-  lines.push("Excluded Because Already Contacted:");
-  for (const item of result.report.excludedAlreadyContacted.slice(0, 10)) {
-    lines.push(`- ${item.company} | ${item.reason}`);
-  }
-  lines.push("");
-  lines.push("Excluded Because Not Good Enough:");
-  for (const item of result.report.excludedNotGoodEnough.slice(0, 10)) {
-    lines.push(`- ${item.company} | ${item.reason}`);
-  }
-  return lines.join("\n");
-}
-
 export function createTomorrowSourcingService(baseDir: string) {
   return {
-    async run(options: TomorrowSourcingOptions = {}): Promise<TomorrowSourcingResult> {
+    async run(_options: TomorrowSourcingOptions = {}): Promise<TomorrowSourcingResult> {
       const profile = loadProfile(baseDir);
       const config = loadConfig(baseDir);
       const seedMatches = loadSeedCompanies(baseDir);
@@ -1069,8 +962,7 @@ export function createTomorrowSourcingService(baseDir: string) {
         excludedNotGoodEnough: outreachExcluded,
       };
 
-      const text = reportText({ report });
-      return { report, text };
+      return { report, text: "" };
     },
   };
 }

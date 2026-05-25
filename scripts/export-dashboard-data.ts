@@ -286,20 +286,7 @@ export function generateDashboardData(baseDir = path.resolve(process.cwd())) {
   const contacts = db.prepare("SELECT * FROM contacts ORDER BY updated_at DESC").all() as JsonRecord[];
   const jobs = db.prepare("SELECT * FROM jobs ORDER BY updated_at DESC").all() as JsonRecord[];
   const applications = db.prepare("SELECT * FROM applications ORDER BY updated_at DESC").all() as JsonRecord[];
-  const contactLogs = db.prepare(`
-    SELECT cl.*, c.name AS company_name, j.title AS job_title
-    FROM contact_log cl
-    LEFT JOIN companies c ON c.id = cl.company_id
-    LEFT JOIN jobs j ON j.id = cl.job_id
-    ORDER BY cl.created_at DESC
-  `).all() as JsonRecord[];
-  const outcomeLogs = db.prepare(`
-    SELECT ol.*, c.name AS company_name, j.title AS job_title
-    FROM outcome_log ol
-    LEFT JOIN companies c ON c.id = ol.company_id
-    LEFT JOIN jobs j ON j.id = ol.job_id
-    ORDER BY ol.created_at DESC
-  `).all() as JsonRecord[];
+
 
   const contactsByCompanyId = new Map<number, JsonRecord[]>();
   for (const contact of contacts) {

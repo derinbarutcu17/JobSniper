@@ -38,8 +38,10 @@ function help(): string {
     "  sources test",
     "  source tomorrow (report-only)",
     "  stats",
+    "  status",
     "  export json [path]",
     "  daily [limit]",
+    "  automate daily [--limit-jobs <n>] [--limit-companies <n>] [--dry-run]",
     "  snap job <job-id> [--status <status>] [--method <method>] [--note <text>]",
     "  snap company <company-ref> [--status <status>] [--channel <channel>] [--note <text>]",
   ].join("\n");
@@ -326,6 +328,7 @@ export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<st
   if (command === "source" && rest[0] === "tomorrow") {
     let outputPath: string | undefined;
     let jsonPath: string | undefined;
+    let pdfPath: string | undefined;
     for (let index = 1; index < rest.length; index += 1) {
       const token = rest[index];
       if (token === "--output") {
@@ -334,13 +337,43 @@ export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<st
       } else if (token === "--json") {
         jsonPath = rest[index + 1];
         index += 1;
+      } else if (token === "--pdf-path") {
+        pdfPath = rest[index + 1];
+        index += 1;
       }
     }
-    return app.sourceTomorrow({ outputPath, jsonPath });
+    return app.sourceTomorrow({ outputPath, jsonPath, pdfPath });
+  }
+
+  if (command === "daily") {
+    return app.daily(Number(rest[0] ?? 10));
+  }
+
+  if (command === "automate" && rest[0] === "daily") {
+    let limitJobs: number | undefined;
+    let limitCompanies: number | undefined;
+    let dryRun = false;
+    for (let index = 1; index < rest.length; index += 1) {
+      const token = rest[index];
+      if (token === "--limit-jobs") {
+        limitJobs = Number(rest[index + 1]);
+        index += 1;
+      } else if (token === "--limit-companies") {
+        limitCompanies = Number(rest[index + 1]);
+        index += 1;
+      } else if (token === "--dry-run") {
+        dryRun = true;
+      }
+    }
+    return app.automateDaily({ limitJobs, limitCompanies, dryRun });
   }
 
   if (command === "stats") {
     return app.stats();
+  }
+
+  if (command === "status") {
+    return app.status();
   }
 
   if (command === "export" && rest[0] === "json") {

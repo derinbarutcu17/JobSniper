@@ -10,7 +10,10 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "types": ["node", "vitest/globals"]
   },
+  "exclude": ["scripts/"],
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

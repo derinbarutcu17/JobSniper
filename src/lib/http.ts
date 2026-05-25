@@ -5,15 +5,6 @@ import { withTimeout } from "./async.js";
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36";
 
-function adaptResponse(response: Response): HttpResponseLike {
-  return {
-    ok: response.ok,
-    status: response.status,
-    text: () => response.text(),
-    json: () => response.json(),
-  };
-}
-
 function challengeDetected(status: number, body: string, url: string): boolean {
   const lower = body.toLowerCase();
   return (

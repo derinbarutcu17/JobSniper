@@ -563,7 +563,7 @@ export interface JobDetail extends JobSummary {
   outreachNoteAssetPath: string;
 }
 
-export interface JobDetailView extends JobDetail {}
+
 
 export interface TriageItem extends JobSummary {
   recommendationReason: string;
@@ -579,7 +579,7 @@ export interface AssetBundleView {
 }
 
 export interface PipelineResult {
-  job: JobDetailView;
+  job: JobDetail;
   assets?: AssetBundleView;
   updatedStatus: PipelineStatus;
 }
@@ -662,8 +662,6 @@ export interface ContactSummary {
   evidenceType: string;
 }
 
-export interface RunMetricsSnapshot extends RunSummary {}
-
 export interface RunResult {
   run: RunRecord;
   summary: RunSummary;
@@ -673,6 +671,17 @@ export interface StatsSnapshot {
   jobs: { total: number; eligible: number };
   companies: number;
   contacts: number;
+  outreach: {
+    reached: number;
+    sentEmail: number;
+    talking: number;
+    rejected: number;
+    archived: number;
+    applied: number;
+    contacted: number;
+    replyReceived: number;
+    interviewing: number;
+  };
   strategic: {
     actionable: number;
     applyNow: number;
@@ -855,4 +864,80 @@ export interface TomorrowSourcingOptions {
   outputPath?: string;
   jsonPath?: string;
   pdfPath?: string;
+}
+
+// ── Daily Queue Engine ──
+
+export interface QueryPack {
+  id: string;
+  label: string;
+  target: "job" | "company";
+  positiveTerms: string[];
+  negativeTerms: string[];
+  locationFilters: string[];
+  sourceCaps: {
+    maxPerSource: number;
+    allowedDomains?: string[];
+    excludedDomains?: string[];
+  };
+  lane: LaneId;
+}
+
+export interface DailyQueueJobItem {
+  type: "job";
+  id?: number;
+  canonicalKey: string;
+  title: string;
+  companyName: string;
+  url: string;
+  score: number;
+  recommendation: OpportunityRecommendation;
+  recommendedRoute: RecommendedRoute;
+  reason: string;
+  isNew: boolean;
+  lastSeenAt: string;
+}
+
+export interface DailyQueueCompanyItem {
+  type: "company";
+  id?: number;
+  canonicalKey: string;
+  name: string;
+  domain: string;
+  url: string;
+  startupScore: number;
+  contactabilityScore: number;
+  bestRoute: RecommendedRoute;
+  bestContact: string;
+  reason: string;
+  isNew: boolean;
+  lastSeenAt: string;
+}
+
+export interface DailyQueueResult {
+  jobs: DailyQueueJobItem[];
+  companies: DailyQueueCompanyItem[];
+  excluded: {
+    alreadyInDb: number;
+    alreadyActedOn: number;
+    humanExcluded: number;
+    lowScore: number;
+    negativeTermMatch: number;
+  };
+  generatedAt: string;
+  queryPackSummary: Array<{ packId: string; queried: number; returned: number }>;
+}
+
+export interface DailyReport {
+  result: DailyQueueResult;
+  markdownDigest: string;
+  jsonPath: string;
+  markdownPath: string;
+}
+
+export interface DailyAutomationOptions {
+  outputDir?: string;
+  limitJobs?: number;
+  limitCompanies?: number;
+  dryRun?: boolean;
 }

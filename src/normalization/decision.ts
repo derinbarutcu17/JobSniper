@@ -50,8 +50,8 @@ export function buildDecisionSnapshot(
     route.recommendedRoute === "ats_plus_cold_email";
   const weakSurface = !listing.isRealJobPage || listing.parseConfidence < 0.5 || listing.sourceConfidence < 0.55;
 
-  let recommendation: JobDecisionSnapshot["recommendation"] = "watch";
-  let recommendationReason = "Worth keeping visible, but not yet a top-priority pursuit.";
+  let recommendation: JobDecisionSnapshot["recommendation"];
+  let recommendationReason: string;
 
   if (eligibility === "excluded" || score < 35) {
     recommendation = "discard";

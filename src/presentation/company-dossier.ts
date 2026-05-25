@@ -1,4 +1,3 @@
-import type Database from "better-sqlite3";
 import type { CompanyDecisionSnapshot, OpportunityRecommendation, RecommendedRoute } from "../types.js";
 
 function priorityBand(score: number): CompanyDecisionSnapshot["priorityBand"] {
