@@ -9,7 +9,7 @@ It does one job well:
 
 It then dedupes aggressively, remembers what is `found`, `contacted`, and `applied`, syncs only useful rows to Google Sheets, and writes one Markdown report plus one JSON report for agents.
 
-SQLite is the source of truth. Google Sheets is a mirror. The old dashboard flow is legacy.
+SQLite is the source of truth. Google Sheets is a mirror.
 
 ## Quick Start
 
