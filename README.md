@@ -133,7 +133,7 @@ SQLite keeps the operational history underneath that simple surface.
 
 ## For LLM Agents
 
-This repo is designed to be operated by humans or agents like Hermes, OpenClaw, or Codex.
+This repo is designed to be operated by humans or AI agents.
 
 ### Default Operating Rule
 
@@ -160,7 +160,6 @@ npm run sniper -- daily --deep
 Before making decisions, agents should read:
 
 - the latest JSON report from `data/reports/`
-- `AGENTS.md`
 - the current profile config
 - `data/memory/preferences.json`
 - `data/memory/outcomes.json`
