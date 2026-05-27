@@ -10,37 +10,43 @@ function help(): string {
   return [
     "sniper <subcommand>",
     "",
-    "Commands:",
+    "Daily workflow:",
+    "  daily [--deep] [--refresh-profile] [--json] [--no-sheet] [--reset-sheet] [--no-auto-deep] [--jobs <n>] [--companies <n>]",
+    "",
+    "Profile and discovery:",
     "  onboard <text-or-file>",
     "  run [--lane <lane-id>] [--company-watch]",
     "  digest [limit]",
     "  shortlist [limit]",
     "  triage [limit]",
+    "  companies [limit]",
+    "  contacts [company-id-or-key]",
+    "  enrich company <company-id-or-key>",
+    "",
+    "State and sync:",
+    "  status",
+    "  stats",
+    "  sheet sync [--companies-only]",
+    "  sheet pull",
+    "  export json [path]",
+    "  contact log <company-id-or-key> --channel <email|linkedin|ats|founder> [--job <job-id>] [--note <text>]",
+    "  company-state <company-id-or-key> --status <reached|sent_email|talking|rejected|archived> [--channel <email|linkedin|ats|founder>] [--job <job-id>] [--note <text>]",
+    "  apply-state <job-id> --status <discovered|triaged|asset_ready|applied|contacted|reply_received|interviewing|rejected|archived> [--method <ats|direct_email|founder_reachout|linkedin|other>] [--note <text>]",
+    "  outcome log <company-id-or-key> --result <no_reply|reply|call|interview|rejected|positive_signal> [--job <job-id>] [--note <text>]",
+    "",
+    "Debugging and legacy:",
     "  draft <job-id>",
     "  pipeline <job-id-or-url>",
     "  assets <job-id>",
-    "  apply-state <job-id> --status <discovered|triaged|asset_ready|applied|contacted|reply_received|interviewing|rejected|archived> [--method <ats|direct_email|founder_reachout|linkedin|other>] [--note <text>]",
     "  explain <job-id>",
     "  route <job-id>",
     "  pitch <job-id>",
     "  blacklist add [--company | --keyword] [--lane <lane>] <term>",
-    "  sheet sync [--companies-only]",
-    "  sheet pull",
-    "  companies [limit]",
     "  dossier <company-id-or-key>",
-    "  contacts [company-id-or-key]",
-    "  enrich company <company-id-or-key>",
-    "  contact log <company-id-or-key> --channel <email|linkedin|ats|founder> [--job <job-id>] [--note <text>]",
-    "  company-state <company-id-or-key> --status <reached|sent_email|talking|rejected|archived> [--channel <email|linkedin|ats|founder>] [--job <job-id>] [--note <text>]",
-    "  outcome log <company-id-or-key> --result <no_reply|reply|call|interview|rejected|positive_signal> [--job <job-id>] [--note <text>]",
     "  experiments",
     "  requeue <url> [lane]",
     "  sources test",
-    "  source tomorrow (report-only)",
-    "  stats",
-    "  status",
-    "  export json [path]",
-    "  daily [limit]",
+    "  source tomorrow (legacy report-only flow)",
     "  automate daily [--limit-jobs <n>] [--limit-companies <n>] [--dry-run]",
     "  snap job <job-id> [--status <status>] [--method <method>] [--note <text>]",
     "  snap company <company-ref> [--status <status>] [--channel <channel>] [--note <text>]",
@@ -346,7 +352,37 @@ export async function runCli(argv: string[], baseDir = getBaseDir()): Promise<st
   }
 
   if (command === "daily") {
-    return app.daily(Number(rest[0] ?? 10));
+    let mode: "normal" | "deep" = "normal";
+    let refreshProfile = false;
+    let emitJson = false;
+    let noSheet = false;
+    let resetSheet = false;
+    let noAutoDeep = false;
+    let jobsLimit: number | undefined;
+    let companiesLimit: number | undefined;
+    for (let index = 0; index < rest.length; index += 1) {
+      const token = rest[index];
+      if (token === "--deep") {
+        mode = "deep";
+      } else if (token === "--refresh-profile") {
+        refreshProfile = true;
+      } else if (token === "--json") {
+        emitJson = true;
+      } else if (token === "--no-sheet") {
+        noSheet = true;
+      } else if (token === "--reset-sheet") {
+        resetSheet = true;
+      } else if (token === "--no-auto-deep") {
+        noAutoDeep = true;
+      } else if (token === "--jobs") {
+        jobsLimit = Number(rest[index + 1]);
+        index += 1;
+      } else if (token === "--companies") {
+        companiesLimit = Number(rest[index + 1]);
+        index += 1;
+      }
+    }
+    return app.daily({ mode, refreshProfile, emitJson, noSheet, resetSheet, noAutoDeep, jobsLimit, companiesLimit });
   }
 
   if (command === "automate" && rest[0] === "daily") {

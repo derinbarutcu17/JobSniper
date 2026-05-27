@@ -89,6 +89,18 @@ export interface JobBoardSource {
   maxResults?: number;
 }
 
+export interface FundedStartupSource {
+  name: string;
+  provider:
+    | "handpicked_berlin_index"
+    | "handpicked_berlin_article"
+    | "tech_eu_article"
+    | "eu_startups_article"
+    | "vc_portfolio";
+  url: string;
+  maxCompanies?: number;
+}
+
 export interface SniperConfig {
   search: {
     maxResultsPerQuery: number;
@@ -109,6 +121,7 @@ export interface SniperConfig {
     rss: RssSource[];
     atsBoards: AtsBoardSource[];
     jobBoards: JobBoardSource[];
+    fundedBerlin: FundedStartupSource[];
   };
   blacklist: {
     companies: string[];

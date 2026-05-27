@@ -4,7 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 TIMEOUT_SECS="${SNIPER_DAILY_TIMEOUT:-900}" # 15 minutes default
-DRY_RUN="${SNIPER_DAILY_DRY_RUN:-1}"
+DEEP_MODE="${SNIPER_DAILY_DEEP:-0}"
+REFRESH_PROFILE="${SNIPER_DAILY_REFRESH_PROFILE:-0}"
+NO_SHEET="${SNIPER_DAILY_NO_SHEET:-0}"
 
 if [ ! -d "$REPO_DIR" ]; then
   echo "Job Sniper repo directory was not found: $REPO_DIR" >&2
@@ -52,19 +54,20 @@ run_with_timeout() {
   ' "$timeout_secs" "$@"
 }
 
-SNIPER_CMD=(npm run sniper -- automate daily)
-if [ "$DRY_RUN" = "1" ]; then
-  # Fast report-only path: summarize from DB state without crawling.
-  SNIPER_CMD+=(--dry-run)
-  SNIPER_CMD+=("$@")
-else
-  # Full queue path: discover, generate artifacts, then sync mirrors.
-  SNIPER_CMD+=("$@")
+SNIPER_CMD=(npm run sniper -- daily)
+
+if [ "$DEEP_MODE" = "1" ]; then
+  SNIPER_CMD+=(--deep)
 fi
+
+if [ "$REFRESH_PROFILE" = "1" ]; then
+  SNIPER_CMD+=(--refresh-profile)
+fi
+
+if [ "$NO_SHEET" = "1" ]; then
+  SNIPER_CMD+=(--no-sheet)
+fi
+
+SNIPER_CMD+=("$@")
 
 run_with_timeout "$TIMEOUT_SECS" "${SNIPER_CMD[@]}"
-
-if [ "$DRY_RUN" != "1" ]; then
-  npm run sniper -- sheet sync
-  npm run live:sync
-fi

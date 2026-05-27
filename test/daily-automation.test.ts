@@ -143,13 +143,14 @@ describe("hermes-daily-run wrapper", () => {
     expect(fs.existsSync(scriptPath)).toBe(true);
 
     const content = fs.readFileSync(scriptPath, "utf8");
-    // Should call automate daily, not a chain of separate commands
-    expect(content).toContain("automate daily");
+    // Should call the new daily command, not a chain of separate commands
+    expect(content).toContain("npm run sniper -- daily");
     // Should not contain the old multi-command chain
     expect(content).not.toContain("sheet pull");
     expect(content).not.toContain("triage 25");
     expect(content).not.toContain("companies 25");
     expect(content).not.toContain("export json");
+    expect(content).not.toContain("live:sync");
     // Should have a single timeout helper
     expect(content).toContain("run_with_timeout");
     expect(content).toContain("SNIPER_DAILY_TIMEOUT");

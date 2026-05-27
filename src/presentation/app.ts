@@ -29,10 +29,11 @@ import { createRunService } from "../state/services/run-service.js";
 import { createSheetSyncService } from "../state/services/sheet-sync-service.js";
 import { createStatsService } from "../state/services/stats-service.js";
 import { createOutreachStatusService } from "../state/services/outreach-status-service.js";
-import { createTomorrowSourcingService } from "../state/services/tomorrow-sourcing-service.js";
 import { runDailyQueue } from "../state/services/daily-queue-service.js";
 import { writeDailyArtifacts } from "./daily-report.js";
 import type { DailyAutomationOptions } from "../types.js";
+import { presentDailyResult, runDailyEngine } from "../daily/daily-engine.js";
+import type { DailyEngineOptions } from "../daily/daily-types.js";
 
 export interface AppDependencies {
   deps?: Dependencies;
@@ -67,7 +68,6 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
   const sheetSyncService = createSheetSyncService(baseDir, sheetGateway);
   const statsService = createStatsService(baseDir);
   const outreachStatusService = createOutreachStatusService(baseDir);
-  const tomorrowSourcingService = createTomorrowSourcingService(baseDir);
 
   return {
     async onboard(input: string) {
@@ -245,6 +245,8 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
     },
 
     async sourceTomorrow(options: { outputPath?: string; jsonPath?: string; pdfPath?: string } = {}) {
+      const { createTomorrowSourcingService } = await import("../state/services/tomorrow-sourcing-service.js");
+      const tomorrowSourcingService = createTomorrowSourcingService(baseDir);
       return presentTomorrowSourcing(await tomorrowSourcingService.run(options));
     },
 
@@ -284,80 +286,9 @@ export function createApp(baseDir: string, dependencies: AppDependencies = {}) {
       return `Pulled ${result.pulled} rows from spreadsheet ${result.spreadsheetId}.`;
     },
 
-    async daily(limit = 10) {
-      const { db } = openDatabase(baseDir);
-
-      const topJobs = db.prepare(
-        "SELECT id, title, company_name, score, recommendation, recommended_route, url, pipeline_status, location, work_model, lane FROM jobs WHERE recommendation IN ('apply_now', 'cold_email') AND pipeline_status NOT IN ('applied', 'contacted', 'rejected', 'archived') ORDER BY score DESC, created_at DESC LIMIT ?"
-      ).all(limit) as Array<Record<string, unknown>>;
-
-      const topCompanies = db.prepare(
-        "SELECT c.id, c.name, c.domain, c.startup_score, c.contactability_score, c.company_url, c.careers_url, c.team_url, cos.status as outreach_status, cos.last_contact_channel FROM companies c LEFT JOIN company_outreach_state cos ON c.id = cos.company_id WHERE c.startup_score > 0 OR c.contactability_score > 0 ORDER BY c.startup_score DESC, c.contactability_score DESC LIMIT ?"
-      ).all(limit) as Array<Record<string, unknown>>;
-
-      const contactedCompanies = db.prepare(
-        "SELECT c.name, c.domain, cos.status, cos.last_contact_channel, cos.updated_at FROM companies c JOIN company_outreach_state cos ON c.id = cos.company_id WHERE cos.status IN ('reached', 'sent_email', 'talking', 'applied') ORDER BY cos.updated_at DESC"
-      ).all() as Array<Record<string, unknown>>;
-
-      const appliedJobs = db.prepare(
-        "SELECT title, company_name, pipeline_status, applied_at FROM jobs WHERE pipeline_status IN ('applied', 'contacted') ORDER BY applied_at DESC LIMIT 10"
-      ).all() as Array<Record<string, unknown>>;
-
-      const lines = [];
-      lines.push("=== Daily Job Sniper Digest ===");
-      lines.push("Generated: " + new Date().toLocaleDateString());
-      lines.push("");
-
-      lines.push("--- Top " + topJobs.length + " Jobs to Act On ---");
-      if (topJobs.length === 0) {
-        lines.push("No new actionable jobs. Run 'sniper run' to discover more.");
-      } else {
-        for (const job of topJobs) {
-          const rec = String(job.recommendation || "");
-          const route = String(job.recommended_route || "");
-          const icon = rec === "apply_now" ? "[APPLY]" : "[EMAIL]";
-          lines.push(icon + " " + String(job.title || "") + " at " + String(job.company_name || ""));
-          lines.push("  Score: " + job.score + " | " + String(job.location || "") + " " + String(job.work_model || ""));
-          lines.push("  Route: " + route + " | " + String(job.url || ""));
-          lines.push("");
-        }
-      }
-
-      lines.push("--- Top " + topCompanies.length + " Companies to Cold Email ---");
-      if (topCompanies.length === 0) {
-        lines.push("No new company targets. Run 'sniper run --company-watch' to discover more.");
-      } else {
-        for (const company of topCompanies) {
-          const status = String(company.outreach_status || "new");
-          if (["reached", "sent_email", "talking", "applied"].includes(status)) continue;
-          lines.push("[EMAIL] " + String(company.name || "") + " (" + String(company.domain || "") + ")");
-          lines.push("  Startup score: " + company.startup_score + " | Contact score: " + company.contactability_score);
-          if (company.careers_url) lines.push("  Careers: " + company.careers_url);
-          if (company.team_url) lines.push("  Team: " + company.team_url);
-          lines.push("");
-        }
-      }
-
-      lines.push("--- Already Contacted (No Duplicates) ---");
-      if (contactedCompanies.length === 0) {
-        lines.push("No companies contacted yet.");
-      } else {
-        for (const c of contactedCompanies) {
-          lines.push("  " + String(c.name || "") + " (" + String(c.domain || "") + ") - " + c.status + (c.last_contact_channel ? " via " + c.last_contact_channel : ""));
-        }
-      }
-
-      lines.push("");
-      lines.push("--- Recently Applied ---");
-      if (appliedJobs.length === 0) {
-        lines.push("No applications sent yet.");
-      } else {
-        for (const j of appliedJobs) {
-          lines.push("  " + String(j.title || "") + " at " + String(j.company_name || "") + " - " + j.pipeline_status + (j.applied_at ? " (" + j.applied_at + ")" : ""));
-        }
-      }
-
-      return lines.join("\n");
+    async daily(options: DailyEngineOptions) {
+      const result = await runDailyEngine(baseDir, { ...options, deps });
+      return presentDailyResult(result, options.emitJson);
     },
 
     async automateDaily(options: DailyAutomationOptions = {}) {

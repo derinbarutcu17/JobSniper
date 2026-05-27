@@ -1,7 +1,7 @@
 # Hermes Daily Job Sniper — Cron Job
 
 **Cron:** 9:00 AM Europe/Berlin, Monday–Friday
-**CWD:** `/Users/derin/Desktop/CODING/Job sniper`
+**CWD:** `<repo-root>`
 **Output:** `daily-reports/` in the project root
 
 ## Instructions
@@ -23,7 +23,7 @@ npm run sniper -- daily
 
 ### Step 3 — Cross-reference
 
-Read `/Users/derin/Desktop/CODING/memory/job-search-source-of-truth.md`. Remove any company already in the "Already Applied / Contacted" list from your recommendations.
+Read the local memory source-of-truth file for the current workspace if present. Remove any company already in the "Already Applied / Contacted" list from your recommendations.
 
 ### Step 4 — Filter recommendations
 
@@ -32,7 +32,7 @@ Read `/Users/derin/Desktop/CODING/memory/job-search-source-of-truth.md`. Remove 
 Exclude: Senior/Lead/Manager/Director/Head/VP/Principal/Staff, pure AI/ML Engineer, Backend Engineer, DevOps.
 
 #### Cold Email
-`[EMAIL]` companies that are Berlin startups, not yet contacted, and fit Derin's profile (design + frontend + AI overlap).
+`[EMAIL]` companies that are Berlin startups, not yet contacted, and fit the target profile (design + frontend + AI overlap).
 
 ### Step 5 — Write report
 
@@ -56,4 +56,4 @@ Keep to 3-5 items total. If nothing surfaced, report "No new matches today."
 
 ### Step 6 — Deliver
 
-Send the report to Derin on Telegram. End with a clear next-action question, e.g. "Want me to draft any of these?"
+Send the report to the operator on Telegram. End with a clear next-action question, e.g. "Want me to draft any of these?"

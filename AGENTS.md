@@ -1,10 +1,10 @@
 # Job Sniper AGENTS
 
-Job Sniper is a lean daily sourcing engine for Derin.
+Job Sniper is a lean daily sourcing engine.
 
 The product exists to answer one question well:
 
-What should Derin apply to, and which companies should he cold email next?
+What should the current operator apply to, and which companies should they cold email next?
 
 If a workflow, feature, or edit does not help the daily command:
 
@@ -31,7 +31,7 @@ Use this for broader sourcing:
 npm run sniper -- daily --deep
 ```
 
-Use this when Derin says his portfolio, GitHub, CV, or positioning changed:
+Use this when the profile, GitHub, CV, or positioning changes:
 
 ```bash
 npm run sniper -- daily --refresh-profile
@@ -47,45 +47,45 @@ npm run sniper -- daily --no-auto-deep
 npm run sniper -- daily --jobs 10 --companies 20
 ```
 
-## Hermes Autonomy
+## Agent Autonomy
 
-Hermes should be able to run this repo end-to-end without extra prompting when the task is about sourcing or follow-up drafts.
+Agents should be able to run this repo end-to-end without extra prompting when the task is about sourcing or follow-up drafts.
 
 Use this loop:
 
 1. Run `npm run sniper -- daily` by default.
-2. Use `--deep` only when the normal run is thin or when Derin explicitly asks for broader sourcing.
-3. Use `--refresh-profile` when Derin changes his portfolio, GitHub, CV, or positioning.
+2. Use `--deep` only when the normal run is thin or when broader sourcing is explicitly requested.
+3. Use `--refresh-profile` when the operator changes portfolio, GitHub, CV, or positioning.
 4. Read the JSON report first for decisions, then the Markdown report for human-readable context.
 5. Update SQLite-backed state before any mirror sync.
 6. Sync Google Sheets only when the task touches outreach or listings.
 7. If drafting emails, create Gmail drafts only.
-8. Never send emails or submit applications unless Derin explicitly asks.
+8. Never send emails or submit applications unless explicitly asked.
 9. Never guess private inboxes. Use verified public emails or public contact routes only.
 10. Never take over the computer just to compose mail. Keep the workflow inside the Gmail drafting path or the repo workflow.
 
-Hermes should prefer these outputs:
+Agents should prefer these outputs:
 
 - `daily` JSON for decisions
 - `daily` Markdown for human review
 - SQLite for state mutation
 - Gmail drafts for outbound follow-up text
 
-When Hermes needs to continue from a previous sourced batch, it should preserve:
+When an agent needs to continue from a previous sourced batch, it should preserve:
 
 - already contacted companies
 - already applied companies
 - public contact routes
 - the latest memory corrections in `preferences.json` and `outcomes.json`
 
-When Hermes is unsure whether a company is worth keeping, it should keep the signal conservative and leave the lead in the report or memory rather than inventing detail.
+When an agent is unsure whether a company is worth keeping, it should keep the signal conservative and leave the lead in the report or memory rather than inventing detail.
 
 ## Current Product Shape
 
 The current daily flow should:
 
-- discover jobs Derin can apply to
-- discover funded Berlin companies and startups Derin can cold email
+- discover jobs the operator can apply to
+- discover funded companies and startups the operator can cold email
 - prefer Berlin and Germany-compatible opportunities
 - dedupe aggressively by company domain and job canonical key
 - remember `found`, `applied`, and `contacted`
@@ -95,7 +95,7 @@ The current daily flow should:
 - write one Markdown report
 - write one JSON report
 
-The funded-company path currently includes Berlin-oriented startup/funding sources such as Handpicked Berlin, selected Tech.eu / EU-Startups articles, and a VC-portfolio seed path that must still be corroborated by stronger Berlin/funding evidence before it should dominate recommendations.
+The funded-company path currently includes Berlin-oriented startup and funding sources. It should remain corroboration-heavy so portfolio-only leads do not dominate recommendations.
 
 ## Non-Negotiables
 
@@ -106,7 +106,7 @@ Agents must:
 - treat SQLite as canonical state
 - treat Google Sheets as a mirror only
 - use Gmail audit evidence when available
-- update memory files when Derin corrects recommendations
+- update memory files when recommendations are corrected
 - keep the Sheets output readable to humans, not just machine-friendly
 
 Agents must never:
@@ -123,67 +123,35 @@ Agents must never:
 
 Primary writable state:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/sniper.db`](/Users/derin/Desktop/CODING/Job%20sniper/data/sniper.db)
+- `data/sniper.db`
 
 Stable profile facts:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/config/derin.profile.json`](/Users/derin/Desktop/CODING/Job%20sniper/config/derin.profile.json)
+- `SNIPER_PROFILE_PATH` or `config/profile.example.json` as the local template
 
 Mutable preference corrections:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/memory/preferences.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/memory/preferences.json)
+- `data/memory/preferences.json`
 
 Lightweight recommendation outcomes:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/memory/outcomes.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/memory/outcomes.json)
+- `data/memory/outcomes.json`
 
 Operational source notes:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/memory/source-state.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/memory/source-state.json)
+- `data/memory/source-state.json`
 
 Profile cache:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/cache/profile-context.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/cache/profile-context.json)
+- `data/cache/profile-context.json`
 
 Optional Gmail audit input:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/import/gmail-audit.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/import/gmail-audit.json)
+- `data/import/gmail-audit.json`
 
 Reports:
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/reports`](/Users/derin/Desktop/CODING/Job%20sniper/data/reports)
-
-## Derin Profile
-
-Derin is:
-
-- Berlin-based
-- a Product Designer / Design Engineer
-- strongest when design taste, interface quality, prototyping speed, and AI-assisted product building come together
-
-Positioning:
-
-- polished product interfaces
-- design systems
-- prototypes
-- AI-assisted workflows
-- product-minded frontend execution
-
-Do not position him as:
-
-- traditional full-stack engineer
-- backend engineer
-- ML engineer
-- senior software engineer
-- pure visual designer only
-
-Portfolio:
-
-- [https://derinb.vercel.app/](https://derinb.vercel.app/)
-
-GitHub:
-
-- [https://github.com/derinbarutcu17](https://github.com/derinbarutcu17)
+- `data/reports/`
 
 ## Targeting Rules
 
@@ -261,165 +229,65 @@ Boost:
 - German nice-to-have
 - international team
 
-Keep but downgrade:
+Keep but lower confidence:
 
-- German-language post with no explicit German requirement
+- German-language posts without an explicit German requirement
 
-Reject or bury below report threshold:
+Reject or heavily downgrade:
 
 - German required
 - C1 German
 - native German
 - fluent German mandatory
-- Deutsch auf Muttersprachniveau
-- verhandlungssicheres Deutsch
+- Deutsch auf Muttersprachlevel
 
-## Company Recommendation Rules
+## Contact Rules
 
-Every surfaced company must include:
+Valid company contact routes:
 
-- company name
-- website
-- contact route
+- public founder/team email
+- hiring/recruiting email
+- `jobs@` / `careers@`
+- `hello@` / `contact@`
+- contact form
+- LinkedIn profile
+- team page with identifiable person
 
-Valid contact routes:
-
-1. public founder or team email
-2. hiring or recruiting email
-3. `jobs@` or `careers@`
-4. `hello@` or `contact@`
-5. contact form
-6. LinkedIn profile
-7. team page with an identifiable person
-
-Good company signals:
-
-- Berlin or Germany relevance
-- startup, studio, agency, or useful product company
-- early funding or visible momentum
-- AI tooling
-- devtools
-- creative tools
-- SaaS
-- visible founder or team
-- careers page
-- public email or other clear route
-
-Do not over-filter companies. Coverage matters, but no-contact-route companies should not appear in the top cold-email list.
+Never guess private email patterns.
 
 ## Gmail Audit Rule
 
-The v1 Gmail path is file-based import, not direct Gmail API dependency.
+Use Gmail audit evidence when available to infer:
 
-Input file:
+- `contacted`
+- `applied`
 
-- [`/Users/derin/Desktop/CODING/Job sniper/data/import/gmail-audit.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/import/gmail-audit.json)
-
-Use it to:
-
-- mark `contacted`
-- mark `applied`
-- skip duplicates in the next daily run
-- explain why items were skipped
-
-Store only:
-
-- sender / recipient metadata
-- subject
-- date
-- inferred event
-- evidence summary
-
-Never store full email bodies.
-
-If uncertain:
-
-- keep the signal conservative
-- prefer no mutation over a wrong mutation
+If the audit is uncertain, store the signal and do not mutate state.
 
 ## Sheets Rule
 
-Sheets is a mirror only.
+Sheets should stay compact and readable:
 
-Only two tabs are part of the current product:
-
-- `Jobs`
-- `Companies`
-
-The daily sync should:
-
-- update existing rows by canonical key or domain
-- append new actionable rows
-- preserve `found` / `applied` / `contacted`
-- never dump raw scraped noise
-- keep the tabs readable to humans with clear headers, row styling, confidence colors, and stage/status cues
-
-If Derin asks for a clean reset, use:
-
-```bash
-npm run sniper -- daily --reset-sheet
-```
-
-## Reports Rule
-
-Every successful daily run should write:
-
-- one Markdown report
-- one JSON report
-
-Agents should prefer the JSON file for machine decisions and the Markdown file for human-readable summaries.
+- `Jobs` and `Companies` only
+- no raw scraped noise
+- no dashboard dependency
+- no manual edits in the live mirror
 
 ## Memory Update Rule
 
-When Derin corrects recommendations:
+When the operator corrects a recommendation:
 
-- update [`/Users/derin/Desktop/CODING/Job sniper/data/memory/preferences.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/memory/preferences.json)
-
-When Derin says a recommendation was useful, bad, redundant, or misleading:
-
-- update [`/Users/derin/Desktop/CODING/Job sniper/data/memory/outcomes.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/memory/outcomes.json)
-
-When you discover operational sourcing facts that should persist locally:
-
-- update [`/Users/derin/Desktop/CODING/Job sniper/data/memory/source-state.json`](/Users/derin/Desktop/CODING/Job%20sniper/data/memory/source-state.json)
-
-Do not bury mutable memory only in chat or markdown notes.
+- update `data/memory/preferences.json`
+- update `data/memory/outcomes.json` when the recommendation proved useful or bad
+- update `data/memory/source-state.json` for verified contact-route changes
 
 ## Quality Gates
 
-Before you call the run good:
+Before treating a run as good:
 
-- job recommendations are deduped
-- company recommendations are deduped domain-first
-- already-contacted companies stay out of the top company list
-- already-applied companies stay out of the top company and job lists
-- company recommendations always include a usable public route
-- German-required roles do not surface as top recommendations
-- senior design leadership roles do not float to the top by default
-- Berlin and Germany-compatible opportunities dominate the report
-- funded Berlin startup leads should beat generic portfolio noise
-- both Markdown and JSON artifacts were written
-- Sheets sync failure does not erase local reports
-
-## Main Files
-
-- [`/Users/derin/Desktop/CODING/Job sniper/src/daily/daily-engine.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/daily/daily-engine.ts)
-- [`/Users/derin/Desktop/CODING/Job sniper/src/daily/discovery.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/daily/discovery.ts)
-- [`/Users/derin/Desktop/CODING/Job sniper/src/daily/funded-berlin-startups.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/daily/funded-berlin-startups.ts)
-- [`/Users/derin/Desktop/CODING/Job sniper/src/daily/classification.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/daily/classification.ts)
-- [`/Users/derin/Desktop/CODING/Job sniper/src/daily/dedupe.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/daily/dedupe.ts)
-- [`/Users/derin/Desktop/CODING/Job sniper/src/daily/gmail-audit.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/daily/gmail-audit.ts)
-- [`/Users/derin/Desktop/CODING/Job sniper/src/daily/sheets-sync.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/daily/sheets-sync.ts)
-- [`/Users/derin/Desktop/CODING/Job sniper/src/presentation/cli.ts`](/Users/derin/Desktop/CODING/Job%20sniper/src/presentation/cli.ts)
-
-## Legacy Surfaces
-
-These may remain in the repo for debugging, migration safety, or historical tests, but they are not the primary product:
-
-- dashboard export paths
-- live dashboard sync flows
-- old queue-style automation chains
-- route / pitch / draft / dossier as a default workflow
-- tomorrow-sourcing report flows
-
-If you touch those surfaces, keep them explicitly secondary to `daily`.
+- `npm run typecheck` passes
+- `npm test` passes
+- `daily` writes Markdown and JSON reports
+- the top recommendations are deduped
+- already contacted or applied companies do not resurface
+- company recommendations have a real website plus a contact route

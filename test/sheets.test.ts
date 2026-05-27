@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { syncDailyRecommendations } from "../src/daily/sheets-sync.js";
 import { loadConfig } from "../src/normalization/config.js";
 import { openDatabase, recordRunMetrics, upsertJob } from "../src/state/db.js";
 import { pullSheets, syncSheets, type SheetGateway } from "../src/state/sheets.js";
+import type { DailyReportPayload } from "../src/daily/daily-types.js";
 import type { ListingCandidate, ProfileSummary, SniperConfig } from "../src/types.js";
 import { makeTempDir } from "./helpers.js";
 
@@ -98,6 +100,78 @@ function listing(): ListingCandidate {
   };
 }
 
+function dailyPayload(overrides: Partial<DailyReportPayload> = {}): DailyReportPayload {
+  return {
+    generatedAt: "2026-03-11T00:00:00.000Z",
+    mode: "normal",
+    profileCache: {
+      usedCache: true,
+      refreshed: false,
+      staleFallback: false,
+      cachePath: "/tmp/profile.json",
+      warnings: [],
+    },
+    gmailAudit: {
+      fileFound: false,
+      importedSignals: 0,
+      appliedMutations: 0,
+      contactedMutations: 0,
+      warnings: [],
+    },
+    sheets: {
+      skipped: true,
+      ok: false,
+      message: "",
+      warnings: [],
+    },
+    summary: {
+      jobsRecommended: 0,
+      companiesRecommended: 1,
+      alreadyAppliedSkipped: 0,
+      alreadyContactedSkipped: 0,
+      duplicatesRemoved: 0,
+      autoDeepTriggered: false,
+    },
+    jobs: [],
+    companies: [
+      {
+        rank: 1,
+        canonicalDomain: "moda.ai",
+        state: "found",
+        confidence: 90,
+        confidenceLabel: "high",
+        company: "ModaAI",
+        website: "https://moda.ai",
+        location: "Berlin",
+        companyType: "startup",
+        contactRoute: "hello@moda.ai",
+        contactType: "public_email",
+        contactQuality: "high",
+        source: "seed",
+        stage: "seed",
+        sizeBand: "1-10",
+        priorityBand: "high",
+        stageRank: 5,
+        whyFit: "fit",
+        reasons: [],
+        warnings: [],
+        firstSeenAt: "2026-03-11T00:00:00.000Z",
+        lastSeenAt: "2026-03-11T00:00:00.000Z",
+      },
+      ...(overrides.companies ?? []),
+    ],
+    skipped: [],
+    discovery: {
+      lanes: [],
+      warnings: [],
+      sourcesAttempted: [],
+    },
+    reportPath: "/tmp/report.md",
+    jsonPath: "/tmp/report.json",
+    ...overrides,
+  } as DailyReportPayload;
+}
+
 describe("sheets sync", () => {
   it("creates full schema and preserves manual columns on repeat sync", async () => {
     const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
@@ -187,8 +261,6 @@ describe("sheets sync", () => {
     expect(gateway.headers.get("RunMetrics")).toContain("status");
     expect(gateway.headers.get("Contacts")).toContain("evidence_excerpt");
     expect(gateway.sheets.has("Jobs ")).toBe(false);
-    expect(gateway.sheets.has("Jobs 2026-03-11")).toBe(true);
-    expect(gateway.headers.get("Jobs 2026-03-11")).toContain("canonical_key");
     expect(after).toHaveLength(1);
     expect(after[0]?.owner_notes).toBe("call founder");
     if (previousSheetId) {
@@ -239,50 +311,19 @@ describe("sheets sync", () => {
     }
   });
 
-  it("does not count ghost sheet rows as successful pulls and removes stale daily tabs", async () => {
+  it("does not count ghost sheet rows as successful pulls and cleans up stale tabs", async () => {
     const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
     delete process.env.SNIPER_GOOGLE_SHEET_ID;
     const baseDir = makeTempDir();
     const gateway = new FakeSheetGateway();
     const { db } = openDatabase(baseDir);
-    const config = loadConfig(baseDir);
-    const prof = profile();
-
-    upsertJob(
-      db,
-      config,
-      { ...listing(), postedAt: "2026-03-10", url: "https://jobs.example.com/design-10", applyUrl: "https://jobs.example.com/design-10" },
-      82,
-      "Good Match",
-      "Strong fit",
-      ["figma"],
-      prof,
-      {
-        titleFit: 10,
-        skillFit: 10,
-        seniorityFit: 10,
-        locationFit: 10,
-        workModelFit: 10,
-        languageFit: 10,
-        companyFit: 0,
-        startupFit: 0,
-        freshnessFit: 0,
-        contactabilityFit: 0,
-        sourceQualityFit: 0,
-        positives: ["figma"],
-        negatives: [],
-        gatesPassed: ["title_family"],
-        gatesFailed: [],
-      },
-      "eligible",
-    );
 
     await syncSheets(baseDir, gateway);
-    expect(gateway.sheets.has("Jobs 2026-03-10")).toBe(true);
 
     gateway.sheets.set("Jobs", [
       { canonical_key: "ghost-job", owner_notes: "ignore me" },
     ]);
+    gateway.sheets.set("Jobs 2026-03-10", [{ canonical_key: "stale-job" }]);
     process.env.SNIPER_GOOGLE_SHEET_ID = "sheet-123";
     const pull = await pullSheets(baseDir, gateway);
     expect(pull.pulled).toBe(0);
@@ -332,7 +373,6 @@ describe("sheets sync", () => {
     await syncSheets(baseDir, gateway, undefined, "companies_only");
 
     expect((gateway.sheets.get("Companies") ?? [])[0]?.best_contact).toBe("hello@moda.ai");
-    expect(gateway.sheets.has("Jobs 2026-03-11")).toBe(false);
     expect(gateway.sheets.get("Jobs")?.[0]?.owner_notes).toBe("keep me");
 
     if (previousSheetId) {
@@ -365,6 +405,190 @@ describe("sheets sync", () => {
     await syncSheets(baseDir, gateway);
 
     expect((gateway.sheets.get("Contacts") ?? [])[0]?.kind).toBe("general_contact_email");
+
+    if (previousSheetId) {
+      process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;
+    } else {
+      delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    }
+  });
+
+  it("dedupes companies and contacts before writing the live mirror", async () => {
+    const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
+    delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    const baseDir = makeTempDir();
+    const gateway = new FakeSheetGateway();
+    const { db } = openDatabase(baseDir);
+
+    db.exec(`
+      INSERT INTO companies (
+        canonical_key, name, domain, company_url, contact_url, created_at, updated_at
+      ) VALUES (
+        'company:modaai-1', 'ModaAI', 'moda.ai', 'https://moda.ai', 'https://moda.ai/contact', datetime('now'), datetime('now')
+      );
+      INSERT INTO companies (
+        canonical_key, name, domain, company_url, contact_url, created_at, updated_at
+      ) VALUES (
+        'company:modaai-2', 'ModaAI GmbH', 'moda.ai', 'https://moda.ai', 'https://moda.ai/contact', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, name, email, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-hello', 1, '', 'hello@moda.ai', 'https://moda.ai/contact', 'general_contact_email', 'high', 'explicit_email', 1, datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, name, email, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-hello-dup', 1, '', 'hello@moda.ai', 'https://moda.ai/contact', 'general_contact_email', 'low', 'explicit_email', 1, datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, name, linkedin_url, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-linkedin', 1, '', 'https://www.linkedin.com/in/founder-moda', 'https://moda.ai/about', 'linkedin_person', 'low', 'profile', 1, datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, name, linkedin_url, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-linkedin-dup', 2, '', 'https://www.linkedin.com/in/founder-moda', 'https://moda.ai/about', 'linkedin_person', 'low', 'profile', 1, datetime('now'), datetime('now')
+      );
+    `);
+
+    await syncSheets(baseDir, gateway, undefined, "companies_only");
+    const companies = gateway.sheets.get("Companies") ?? [];
+    const contacts = gateway.sheets.get("Contacts") ?? [];
+
+    expect(companies).toHaveLength(1);
+    expect(companies[0]?.best_contact).toBe("hello@moda.ai");
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]?.email).toBe("hello@moda.ai");
+
+    if (previousSheetId) {
+      process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;
+    } else {
+      delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    }
+  });
+
+  it("filters out no-domain companies unless they have a strong route or funding signal", async () => {
+    const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
+    delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    const baseDir = makeTempDir();
+    const gateway = new FakeSheetGateway();
+    const { db } = openDatabase(baseDir);
+
+    db.exec(`
+      INSERT INTO companies (
+        canonical_key, name, domain, recommendation, stage_text, startup_score, company_fit_score, priority_band, created_at, updated_at
+      ) VALUES (
+        'company:low-no-domain', 'Low Noise', '', 'watch', '', 0, 0, 'low', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, email, linkedin_url, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:low-no-domain', 1, '', 'https://www.linkedin.com/in/low-noise', 'https://www.linkedin.com/company/low-noise', 'linkedin_company', 'low', 'profile', 1, datetime('now'), datetime('now')
+      );
+      INSERT INTO companies (
+        canonical_key, name, domain, company_url, contact_url, recommendation, created_at, updated_at
+      ) VALUES (
+        'company:strong-route', 'Strong Route', '', 'https://strongroute.example', 'https://strongroute.example/contact', 'watch', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, email, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:strong-route', 2, 'hello@strongroute.example', 'general_contact_email', 'high', 'explicit_email', 1, datetime('now'), datetime('now')
+      );
+      INSERT INTO companies (
+        canonical_key, name, domain, recommendation, stage_text, startup_score, company_fit_score, priority_band, created_at, updated_at
+      ) VALUES (
+        'company:funded-no-domain', 'Funded No Domain', '', 'cold_email', 'seed', 78, 72, 'high', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, email, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:funded-no-domain', 3, 'founder@funded.example', 'founder_email', 'high', 'explicit_email', 1, datetime('now'), datetime('now')
+      );
+    `);
+
+    await syncSheets(baseDir, gateway, undefined, "companies_only");
+    const companies = gateway.sheets.get("Companies") ?? [];
+    const contacts = gateway.sheets.get("Contacts") ?? [];
+
+    expect(companies.map((row) => row.name)).toEqual(expect.arrayContaining(["Strong Route", "Funded No Domain"]));
+    expect(companies.map((row) => row.name)).not.toContain("Low Noise");
+    expect(contacts.map((row) => row.company_name)).toEqual(expect.arrayContaining(["Strong Route", "Funded No Domain"]));
+    expect(contacts.map((row) => row.company_name)).not.toContain("Low Noise");
+
+    if (previousSheetId) {
+      process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;
+    } else {
+      delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    }
+  });
+
+  it("limits contacts to the top two routes per company", async () => {
+    const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
+    delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    const baseDir = makeTempDir();
+    const gateway = new FakeSheetGateway();
+    const { db } = openDatabase(baseDir);
+
+    db.exec(`
+      INSERT INTO companies (
+        canonical_key, name, domain, company_url, created_at, updated_at
+      ) VALUES (
+        'company:modaai', 'ModaAI', 'moda.ai', 'https://moda.ai', datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, name, email, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-hello', 1, '', 'hello@moda.ai', 'https://moda.ai/contact', 'general_contact_email', 'high', 'explicit_email', 1, datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, name, email, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-careers', 1, '', 'careers@moda.ai', 'https://moda.ai/jobs', 'careers_email', 'high', 'explicit_email', 1, datetime('now'), datetime('now')
+      );
+      INSERT INTO contacts (
+        canonical_key, company_id, name, linkedin_url, source_url, contact_kind, confidence, evidence_type, is_public, created_at, updated_at
+      ) VALUES (
+        'contact:modaai-linkedin', 1, '', 'https://www.linkedin.com/in/founder-moda', 'https://moda.ai/about', 'linkedin_person', 'low', 'profile', 1, datetime('now'), datetime('now')
+      );
+    `);
+
+    await syncSheets(baseDir, gateway, undefined, "companies_only");
+    const contacts = gateway.sheets.get("Contacts") ?? [];
+
+    expect(contacts).toHaveLength(2);
+    expect(contacts.map((row) => row.email)).toEqual(expect.arrayContaining(["hello@moda.ai", "careers@moda.ai"]));
+    expect(contacts.map((row) => row.linkedin_url)).not.toContain("https://www.linkedin.com/in/founder-moda");
+
+    if (previousSheetId) {
+      process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;
+    } else {
+      delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    }
+  });
+
+  it("rebuilds daily Companies snapshot instead of merging stale sheet rows", async () => {
+    const previousSheetId = process.env.SNIPER_GOOGLE_SHEET_ID;
+    delete process.env.SNIPER_GOOGLE_SHEET_ID;
+    const baseDir = makeTempDir();
+    const gateway = new FakeSheetGateway();
+    gateway.sheets.set("Companies", [
+      { canonical_domain: "stale.example", company: "Stale Company" },
+    ]);
+    gateway.sheets.set("Jobs", [
+      { canonical_key: "stale-job", company: "Stale Company", title: "Ignore me" },
+    ]);
+
+    const result = await syncDailyRecommendations(baseDir, dailyPayload(), gateway);
+    const companies = gateway.sheets.get("Companies") ?? [];
+    const jobs = gateway.sheets.get("Jobs") ?? [];
+
+    expect(result.ok).toBe(true);
+    expect(companies).toHaveLength(1);
+    expect(companies[0]?.canonical_domain).toBe("moda.ai");
+    expect(jobs).toHaveLength(0);
 
     if (previousSheetId) {
       process.env.SNIPER_GOOGLE_SHEET_ID = previousSheetId;

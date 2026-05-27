@@ -1,395 +1,217 @@
 # Job Sniper
 
-`job-sniper` is a local-first job and company intelligence engine for people and agents who want a cleaner way to discover opportunities, rank them, track outreach, and keep everything in sync.
+Job Sniper is a local-first sourcing engine for job seekers, operators, and AI agents.
 
-It does three things well:
+It does one job well:
 
-- scrapes jobs, companies, and public contact surfaces
-- judges which results are actually worth attention
-- refreshes a live dashboard snapshot and optional Google Sheets
+- find jobs people can apply to
+- find companies, startups, studios, and agencies people can cold email
 
-This repo is built for a practical workflow, not demo theatrics:
+It then dedupes aggressively, remembers what is `found`, `contacted`, and `applied`, syncs only useful rows to Google Sheets, and writes one Markdown report plus one JSON report for agents.
 
-- SQLite is the canonical source of truth
-- the scraper is deterministic and inspectable
-- the judgment layer is explicit, not black-box
-- the web UI and Sheets are mirrors of local state
-- no auto-emailing
-- no auto-applying
-
-## Why It Exists
-
-Most job tools are weak in one of two ways:
-
-- they find a lot of noise
-- or they track data without helping you decide what matters
-
-Job Sniper is meant to sit in the useful middle.
-
-It helps a human or an LLM answer:
-
-- What jobs are live right now?
-- Which companies are actually relevant?
-- Which opportunities are reachable by ATS, direct email, or founder/team outreach?
-- Which rows are weak and should be ignored?
-- What has already been contacted, applied to, rejected, or moved forward?
-
-## Who It Is For
-
-Job Sniper is useful if you want a system that can be run by:
-
-- you directly in the terminal
-- an LLM agent like Codex, OpenClaw, or Hermes
-- a lightweight automation workflow
-
-It is especially good for workflows where:
-
-- you care about company discovery, not just job board scraping
-- you want public contact surfaces, not just job links
-- you want one clean state model across local data, dashboard, and Sheets
-- you want to review and control decisions instead of trusting hidden automation
-
-## What It Does
-
-- Onboards a profile from text or file input
-- Searches across ATS boards, RSS, direct board adapters, company sites, and search providers
-- Normalizes jobs, companies, and contacts into one SQLite-backed state model
-- Scores opportunities against your profile
-- Adds a deterministic judgment layer on top of raw scoring
-- Recommends a next action such as `apply_now`, `cold_email`, `watch`, or `discard`
-- Recommends a route such as `ats_only`, `direct_email_first`, or `founder_or_team_reachout`
-- Tracks outreach, applications, replies, interviews, and rejections
-- Supports explicit company-level outreach state updates without requiring a fake job row
-- Syncs state into Google Sheets
-- Exports a live dashboard snapshot for the private web UI
-
-## How It Thinks
-
-Job Sniper is not just a scraper.
-
-Internally it is split into four clear layers:
-
-- `src/ingestion`
-  Scrapers, job-board adapters, ATS discovery, crawling, parsing
-- `src/normalization`
-  Profile inference, scoring, routing, pitch logic, filtering, canonicalization
-- `src/state`
-  SQLite persistence, services, run records, Sheets adapter
-- `src/presentation`
-  CLI, presenters, application-facing formatting
-
-That structure matters because it keeps:
-
-- scraping separate from judgment
-- judgment separate from persistence
-- persistence separate from presentation
-
-## Source of Truth
-
-This is the operating rule:
-
-- SQLite is the only canonical writable state
-
-Everything else is a projection:
-
-- the live dashboard
-- Google Sheets
-- JSON exports
-
-That means:
-
-- if local state changes, the mirrors should be refreshed
-- Sheets should not be treated as the primary database
-- `sheet pull` is intentionally opt-in only
-
-If you want reverse sync from Sheets, enable it explicitly:
-
-```bash
-SNIPER_ENABLE_SHEET_PULL=1 npm run sniper -- sheet pull
-```
+SQLite is the source of truth. Google Sheets is a mirror. The old dashboard flow is legacy.
 
 ## Quick Start
-
-Install and verify:
 
 ```bash
 npm install
 npm run typecheck
 npm test
-npm run sniper -- help
+npm run sniper -- daily --no-sheet --json
+npm run sniper -- daily
 ```
 
-Basic flow:
+## The Main Command
+
+Daily sourcing:
 
 ```bash
-npm run sniper -- onboard "/absolute/path/to/cv.pdf"
-npm run sniper -- run
-npm run sniper -- triage
-npm run sniper -- companies
-npm run sniper -- sheet sync
-npm run live:sync
+npm run sniper -- daily
 ```
 
-Raw shell entrypoint:
+Deep sourcing:
 
 ```bash
-node ./scripts/run-sniper.mjs <subcommand>
+npm run sniper -- daily --deep
 ```
 
-## LLM / Agent Usage
-
-This repo is designed to be easy for an agent to operate.
-
-Good prompts:
-
-- “Run Job Sniper and show me the top 15 Berlin opportunities.”
-- “Find the best cold-email targets with verified public contact surfaces.”
-- “Sync the latest state to Sheets and refresh the live dashboard.”
-- “Show me which companies are already contacted so we do not duplicate outreach.”
-
-Typical agent workflow:
-
-1. onboard or refresh the profile
-2. run discovery
-3. inspect `triage`, `companies`, `route`, and `dossier`
-4. update application or outreach state
-5. sync Sheets
-6. refresh the live dashboard
-
-Canonical rule:
-
-- do not update sent/reached/applied state in markdown files
-- update it in Job Sniper only
-- then regenerate Sheets and the live dashboard from that DB-backed state
-
-## CLI Commands
-
-```text
-/sniper onboard <text-or-file>
-/sniper run [--lane <lane-id>] [--company-watch]
-/sniper digest [limit]
-/sniper shortlist [limit]
-/sniper triage [limit]
-/sniper draft <job-id>
-/sniper explain <job-id>
-/sniper route <job-id>
-/sniper pitch <job-id>
-/sniper pipeline <job-id-or-url>
-/sniper assets <job-id>
-/sniper apply-state <job-id> --status <discovered|triaged|asset_ready|applied|contacted|reply_received|interviewing|rejected|archived> [--method <ats|direct_email|founder_reachout|linkedin|other>] [--note <text>]
-/sniper companies [limit]
-/sniper dossier <company-id-or-key>
-/sniper contacts [company-id-or-key]
-/sniper enrich company <company-id-or-key>
-/sniper contact log <company-id-or-key> --channel <email|linkedin|ats|founder> [--job <job-id>] [--note <text>]
-/sniper company-state <company-id-or-key> --status <reached|sent_email|talking|rejected|archived> [--channel <email|linkedin|ats|founder>] [--job <job-id>] [--note <text>]
-/sniper outcome log <company-id-or-key> --result <no_reply|reply|call|interview|rejected|positive_signal> [--job <job-id>] [--note <text>]
-/sniper experiments
-/sniper blacklist add [--company | --keyword] [--lane <lane>] <term>
-/sniper sheet sync [--companies-only]
-/sniper sheet pull
-/sniper stats
-/sniper export json [path]
-```
-
-## Typical Workflow
-
-### 1. Onboard a profile
+Refresh the profile cache:
 
 ```bash
-npm run sniper -- onboard "/absolute/path/to/cv.pdf"
+npm run sniper -- daily --refresh-profile
 ```
 
-Or:
+Useful variants:
 
 ```bash
-npm run sniper -- onboard "Designer and product builder based in Berlin..."
+npm run sniper -- daily --json
+npm run sniper -- daily --no-sheet
+npm run sniper -- daily --no-auto-deep
+npm run sniper -- daily --jobs 10 --companies 20
 ```
 
-### 2. Run discovery
+## What The Daily Run Does
 
-```bash
-npm run sniper -- run
-npm run sniper -- run --lane design_jobs
-npm run sniper -- run --lane student_jobs
-npm run sniper -- run --company-watch
-```
+The daily command:
 
-### 3. Review what deserves attention
+1. loads the current profile and cache
+2. imports Gmail audit signals when available
+3. discovers jobs and companies
+4. dedupes aggressively
+5. scores candidates with deterministic rules
+6. skips already-contacted and already-applied targets
+7. syncs useful rows to Google Sheets unless disabled
+8. writes a Markdown report and a JSON report
 
-```bash
-npm run sniper -- digest
-npm run sniper -- shortlist
-npm run sniper -- triage
-npm run sniper -- companies
-```
+Reports are written to `data/reports/`.
 
-Use:
+## Normal vs Deep
 
-- `digest` for score-first review
-- `shortlist` for eligible roles
-- `triage` for action-first review
-- `companies` for company-level scanning
+Normal mode targets:
 
-### 4. Inspect the judgment layer
+- 7 jobs
+- 10 companies
+- intended to stay within about 5 minutes
 
-```bash
-npm run sniper -- explain 42
-npm run sniper -- route 42
-npm run sniper -- pitch 42
-npm run sniper -- dossier company:key
-```
+Deep mode targets:
 
-### 5. Track real action
+- 15 jobs
+- 25 companies
+- intended to stay within about 10 minutes
 
-```bash
-npm run sniper -- apply-state 42 --status applied --method ats --note submitted via careers page
-npm run sniper -- company-state company:key --status sent_email --channel email --note intro sent
-npm run sniper -- contact log company:key --channel email --job 42 --note intro sent
-npm run sniper -- outcome log company:key --result reply --job 42 --note recruiter replied
-```
+Auto-deep:
 
-Use:
+- if normal mode finds fewer than 2 useful jobs or fewer than 2 useful companies, it reruns in deep mode unless `--no-auto-deep` is passed
 
-- `apply-state` for specific job applications
-- `company-state` for company-level outreach truth such as reached, sent email, talking, rejected, or archived
-- `contact log` and `outcome log` when you want explicit event history alongside the derived state model
+## Profile And Cache
 
-### 6. Sync projections
+Stable profile facts live in a private path supplied via `SNIPER_PROFILE_PATH`.
 
-```bash
-npm run sniper -- sheet sync
-npm run live:sync
-```
+`config/profile.example.json` shows the expected shape.
 
-## Live Web UI
+Cached context lives in `data/cache/profile-context.json`.
 
-The private live dashboard is a snapshot projection of the current SQLite state.
+Default cache TTL:
 
-It is meant for:
+- 7 days
 
-- reviewing companies
-- reviewing active jobs
-- seeing already-contacted / already-applied rows
-- checking pipeline state from anywhere
+If portfolio or GitHub fetching fails, Job Sniper falls back to stale cache or the stable profile config instead of failing the run.
 
-It is not a second database.
+## Gmail Audit
 
-Current sync flow:
+Optional Gmail audit input file:
 
-1. update SQLite-backed state
-2. run `npm run live:sync`
+- `data/import/gmail-audit.json`
 
-Generated status artifacts are produced locally when you run export/sync commands and are not committed to the repo.
+Use it to mark:
+
+- `contacted`
+- `applied`
+
+It also helps keep already-contacted and already-applied companies out of the daily recommendations.
 
 ## Google Sheets
 
-Google Sheets is supported as an operational mirror.
+Sheets is a mirror, not the database.
 
-Use it for:
-
-- browser-visible review
-- manual notes
-- lightweight team or agent visibility
-
-Do not use it as the canonical store.
-
-Environment variables:
-
-- `SNIPER_GOOGLE_SERVICE_ACCOUNT_PATH`
-- `SNIPER_GOOGLE_SERVICE_ACCOUNT_JSON`
-- `SNIPER_GOOGLE_SHEET_ID`
-- `SNIPER_GOOGLE_FOLDER_ID`
-
-Default tabs:
+Only two tabs matter:
 
 - `Jobs`
 - `Companies`
-- `Contacts`
-- `RunMetrics`
 
-Manual columns preserved on sync:
+Sync only actionable recommendations, not raw scraped items.
 
-- `manual_status`
-- `owner_notes`
-- `priority`
-- `outreach_state`
-- `manual_contact_override`
+## State Model
 
-## Role Packs and Customization
+The exposed operating states are:
 
-Job Sniper is field-agnostic and profile-driven.
+- `found`
+- `contacted`
+- `applied`
 
-It is not tied to one city, one person, or one profession.
+SQLite keeps the operational history underneath that simple surface.
 
-Lanes are driven by role-pack configuration in `config.json`, including:
+## For LLM Agents
 
-- labels
-- lane types
-- search queries
-- keywords
-- title families
-- profile signals
-- mismatch terms
-- startup or company terms
+This repo is designed to be operated by humans or agents like Hermes, OpenClaw, or Codex.
 
-Built-in presets currently include:
+### Default Operating Rule
 
-- `design_jobs`
-- `ai_coding_jobs`
-- `student_jobs`
-- `company_watch`
+Use this by default:
 
-That means you can adapt it to:
+```bash
+npm run sniper -- daily
+```
 
-- a different city
-- a different country
-- a different profession
-- a different candidate profile
+Use this when the profile, GitHub, portfolio, CV, or positioning changes:
 
-without rewriting the engine.
+```bash
+npm run sniper -- daily --refresh-profile
+```
 
-## Architecture Notes
+Use this for broader sourcing:
 
-The core repo is intentionally leaner now:
+```bash
+npm run sniper -- daily --deep
+```
 
-- source adapters and scraping logic live in `src/ingestion`
-- data quality and judgment live in `src/normalization`
-- persistence and services live in `src/state`
-- CLI-facing output lives in `src/presentation`
+### What Agents Should Read First
 
-Compatibility re-export files still exist at older `src/*` paths so the current scripts and tests stay stable while the cleaner structure becomes the real internal boundary.
+Before making decisions, agents should read:
 
-## Privacy
+- the latest JSON report from `data/reports/`
+- `AGENTS.md`
+- the current profile config
+- `data/memory/preferences.json`
+- `data/memory/outcomes.json`
 
-Runtime state should stay local and out of git.
+### What Agents Must Respect
 
-Ignored or local-only data includes:
+Agents must:
 
-- `profile/`
-- `data/*.db`
-- `data/*.html`
-- `.env`
+- treat SQLite as canonical state
+- treat Google Sheets as a mirror only
+- never send emails
+- never submit applications
+- never guess private email addresses
+- update memory when recommendations are corrected
+- keep the sheet readable for humans, not just machines
 
-Secrets should come from environment variables, not committed files.
+Agents must not:
 
-## Repo Map
+- depend on dashboard state
+- manually edit live dashboard data
+- use old multi-command sourcing chains unless debugging
+- treat raw scraped items as recommendations
 
-- [README.md](./README.md)
-  Main project documentation
-- [SKILL.md](./SKILL.md)
-  Minimal skill wrapper
-- [docs/STATE-MODEL.md](./docs/STATE-MODEL.md)
-  State ownership and sync model
-- [docs/CLEANUP-PHASES.md](./docs/CLEANUP-PHASES.md)
-  Cleanup and anti-bloat notes
-- [src/ingestion](./src/ingestion)
-  Scraping and discovery
-- [src/normalization](./src/normalization)
-  Filtering, scoring, routing, judgment
-- [src/state](./src/state)
-  SQLite, services, sync state
-- [src/presentation](./src/presentation)
-  CLI and presenter layer
-- [test](./test)
-  Regression, parser, and service coverage
+### Decision Flow For Agents
+
+1. Run `daily`
+2. Read the JSON report
+3. Check skipped items and dedupe reasons
+4. Update SQLite-backed state if the user gave a status update
+5. Sync Sheets only if outreach or listings changed
+6. Use Gmail audit evidence before marking applied/contacted
+
+### Output Expectations
+
+The daily run produces:
+
+- one Markdown report for humans
+- one JSON report for agents
+- optional Google Sheets mirror updates
+- optional profile cache refresh
+
+## Scripts
+
+Main scripts:
+
+```bash
+npm run sniper -- daily
+npm run daily
+npm run daily:deep
+npm run typecheck
+npm test
+```
+
+Legacy scripts still exist with `:legacy` suffixes when needed for debugging.

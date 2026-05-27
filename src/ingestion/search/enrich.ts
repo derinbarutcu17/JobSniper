@@ -1,5 +1,6 @@
 import { includesAny, uniqueNonEmpty } from "../../lib/text.js";
 import { domainFromUrl } from "../../lib/url.js";
+import { filterKnownInvalidContacts } from "../../lib/contact-memory.js";
 import type { CompanyRecordInput, ContactCandidate, ListingCandidate, PageRecord } from "../../types.js";
 
 export function companyFromListing(listing: ListingCandidate): CompanyRecordInput {
@@ -30,7 +31,11 @@ export function companyFromListing(listing: ListingCandidate): CompanyRecordInpu
     linkedinUrl: listing.companyLinkedinUrl,
     description: listing.description,
     sourceUrls: listing.sourceUrls,
-    publicContacts: listing.publicContacts.map((contact) => contact.email || contact.linkedinUrl || contact.sourceUrl),
+    publicContacts: filterKnownInvalidContacts(
+      listing.publicContacts.map((contact) => contact.email || contact.linkedinUrl || contact.sourceUrl),
+      listing.company || "",
+      domainFromUrl(listing.companyUrl || listing.url),
+    ),
     startupSignals,
     hiringSignals,
     founderNames: [],

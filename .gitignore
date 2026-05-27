@@ -16,3 +16,5 @@ profile/
 *.log
 dist
 .bun-build
+config/*.profile.json
+config/*.local.json

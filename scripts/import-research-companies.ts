@@ -213,7 +213,7 @@ async function main() {
   const args = process.argv.slice(2);
   if (!args.length) usage();
 
-  const baseDir = path.resolve("/Users/derin/Desktop/CODING/Job sniper");
+  const baseDir = process.cwd();
   const { db } = openDatabase(baseDir);
   const timestamp = new Date().toISOString();
   const seen = new Set<string>();

@@ -29,6 +29,35 @@ import type {
   SniperConfig,
 } from "../types.js";
 
+const NON_COMPANY_HOST_PATTERNS = [/linkedin\.com$/i, /wellfound\.com$/i];
+
+function isNonCompanyHost(host: string): boolean {
+  return NON_COMPANY_HOST_PATTERNS.some((pattern) => pattern.test(host));
+}
+
+function companyIdentityFromListing(listing: ListingCandidate): { domain: string; companyUrl: string } {
+  const companyHost = domainFromUrl(listing.companyUrl || "");
+  if (companyHost && !isNonCompanyHost(companyHost)) {
+    return {
+      domain: companyHost,
+      companyUrl: listing.companyUrl,
+    };
+  }
+
+  const jobHost = domainFromUrl(listing.url || "");
+  if (jobHost && !isNonCompanyHost(jobHost)) {
+    return {
+      domain: jobHost,
+      companyUrl: `https://${jobHost}`,
+    };
+  }
+
+  return {
+    domain: "",
+    companyUrl: "",
+  };
+}
+
 export interface DatabaseBundle {
   db: Database.Database;
   baseDir: string;
@@ -938,7 +967,7 @@ export function upsertJob(
   eligibility: string,
   decision?: JobDecisionSnapshot,
 ): { inserted: boolean; updated: boolean; excluded: boolean; companyTouched: boolean; contactsTouched: number } {
-  const domain = domainFromUrl(listing.companyUrl || listing.url);
+  const { domain, companyUrl } = companyIdentityFromListing(listing);
   const companyKey = canonicalCompanyKey(listing.company, domain);
   const duplicateGroupKey = domainTitleFingerprint(domain, listing.title);
   const companyId = upsertCompany(db, {
@@ -946,7 +975,7 @@ export function upsertJob(
     name: listing.company,
     domain,
     location: listing.location,
-    companyUrl: listing.companyUrl || (domain ? `https://${domain}` : ""),
+    companyUrl: companyUrl || (domain ? `https://${domain}` : ""),
     careersUrl: listing.careersUrl || listing.url,
     aboutUrl: listing.aboutUrl,
     teamUrl: listing.teamUrl,

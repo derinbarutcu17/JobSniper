@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { mapLimit, withRetries } from "../lib/async.js";
+import { filterKnownInvalidContacts } from "../lib/contact-memory.js";
 import { uniqueNonEmpty } from "../lib/text.js";
 import { canonicalContactKey, domainFromUrl } from "../lib/url.js";
 import { isPlaceholderEmail, scoreContactCandidate, isStrongDirectEmail, isUsableDirectEmail } from "../normalization/contact-quality.js";
@@ -265,8 +266,12 @@ function scoreFallbackPage(baseUrl: string, page: ReturnType<typeof buildPageRec
 }
 
 export function resolveCompanyBestContact(company: CompanyRow): string {
-  const publicContacts = parseJsonList(company.public_contacts);
   const companyDomain = normalizedCompanyDomain(String(company.domain ?? domainFromUrl(String(company.company_url ?? "")) ?? ""));
+  const publicContacts = filterKnownInvalidContacts(
+    parseJsonList(company.public_contacts),
+    String(company.name ?? ""),
+    companyDomain,
+  );
   const strongDirectEmail = publicContacts
     .filter((entry) => /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(entry) && !isPlaceholderEmail(entry))
     .map((email) => ({

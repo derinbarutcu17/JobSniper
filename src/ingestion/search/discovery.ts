@@ -11,6 +11,7 @@ import {
   upsertPageCache,
 } from "../../state/db.js";
 import { mapLimit, withRetries, withTimeout } from "../../lib/async.js";
+import { filterKnownInvalidContacts } from "../../lib/contact-memory.js";
 import { createDefaultDependencies } from "../../lib/http.js";
 import { earlyFilterListing } from "../../normalization/listing-filter.js";
 import { canonicalCompanyKey, canonicalContactKey, domainFromUrl, normalizeUrl } from "../../lib/url.js";
@@ -67,7 +68,12 @@ function buildCompanyInput(
     ...(contacts.length ? ["public_contact_surface"] : []),
   ];
   const hasConcreteRoleSignal = /job opening|open roles|open positions|view jobs|apply now|we're hiring|we are hiring/i.test(pageText);
-  const directEmailCount = contacts.filter((contact) => Boolean(contact.email)).length;
+  const publicContacts = filterKnownInvalidContacts(
+    contacts.map((contact) => contact.email || contact.linkedinUrl || contact.sourceUrl),
+    candidate.title || "",
+    domain,
+  );
+  const directEmailCount = publicContacts.filter((entry) => entry.includes("@")).length;
   const founderSurfaceCount = contacts.filter((contact) => contact.kind === "team_page" || contact.kind === "linkedin_person").length;
   const startupScore = startupSignals.length * 8;
   const companyFitScore = isCompanyWatchLane(config, candidate.lane) ? 8 : 6;
@@ -93,7 +99,7 @@ function buildCompanyInput(
     linkedinUrl: contacts.find((contact) => contact.kind === "linkedin_company")?.linkedinUrl ?? "",
     description: pageText.slice(0, 1200),
     sourceUrls: [candidate.url],
-    publicContacts: contacts.map((contact) => contact.email || contact.linkedinUrl || contact.sourceUrl),
+    publicContacts,
     startupSignals,
     hiringSignals,
     founderNames: [],

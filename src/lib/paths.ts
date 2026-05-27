@@ -20,8 +20,38 @@ export function resolveDataPath(baseDir: string, ...parts: string[]): string {
   return path.join(dir, ...parts);
 }
 
+export function resolveConfigPath(baseDir: string, ...parts: string[]): string {
+  const dir = path.join(baseDir, "config");
+  ensureDir(dir);
+  return path.join(dir, ...parts);
+}
+
 export function resolveProfilePath(baseDir: string, ...parts: string[]): string {
   const dir = path.join(baseDir, "profile");
+  ensureDir(dir);
+  return path.join(dir, ...parts);
+}
+
+export function resolveMemoryPath(baseDir: string, ...parts: string[]): string {
+  const dir = path.join(baseDir, "data", "memory");
+  ensureDir(dir);
+  return path.join(dir, ...parts);
+}
+
+export function resolveCachePath(baseDir: string, ...parts: string[]): string {
+  const dir = path.join(baseDir, "data", "cache");
+  ensureDir(dir);
+  return path.join(dir, ...parts);
+}
+
+export function resolveImportPath(baseDir: string, ...parts: string[]): string {
+  const dir = path.join(baseDir, "data", "import");
+  ensureDir(dir);
+  return path.join(dir, ...parts);
+}
+
+export function resolveReportPath(baseDir: string, ...parts: string[]): string {
+  const dir = path.join(baseDir, "data", "reports");
   ensureDir(dir);
   return path.join(dir, ...parts);
 }

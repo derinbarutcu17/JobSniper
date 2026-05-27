@@ -1,52 +1,47 @@
 ---
 name: sniper
-description: "Local job-intelligence and outreach strategy workflow for jobs, companies, and public hiring contacts. Use /sniper for discovery, triage, dossiers, route guidance, and sheet sync."
+description: "Lean daily sourcing skill for job seekers. Use it to find jobs to apply to and companies or startups to cold email."
 user-invocable: true
 metadata: { "openclaw": { "requires": { "bins": ["node", "npm"] } } }
 ---
 
 # Sniper
 
-Use this skill when the user wants to discover jobs, track companies, gather public hiring contacts, decide which opportunities deserve time, and sync the results into Google Sheets.
+Use this skill when the operator wants jobs to apply to or companies, startups, studios, or agencies to cold email.
 
-Run the local CLI with:
+Main command:
 
 ```bash
-node {baseDir}/scripts/run-sniper.mjs <subcommand> [args...]
+node {baseDir}/scripts/run-sniper.mjs daily
 ```
 
-Core rules:
+Deep mode:
 
-- Keep the local SQLite database as the source of truth.
-- Collect only public job, company, and contact data.
-- Never send applications or email anyone automatically.
-- Keep decision, route, and pitch logic explainable and deterministic-first.
-- Use Google Sheets only when the user asks to sync or pull.
+```bash
+node {baseDir}/scripts/run-sniper.mjs daily --deep
+```
 
-Primary commands:
+Refresh profile:
 
-- `onboard <text-or-path>`
-- `run [--lane <lane>] [--company-watch]`
-- `digest [limit]`
-- `shortlist [limit]`
-- `triage [limit]`
-- `draft <job-id>`
-- `explain <job-id>`
-- `route <job-id>`
-- `pitch <job-id>`
-- `blacklist add [--company | --keyword] [--lane <lane>] <term>`
-- `companies [limit]`
-- `dossier <company-id-or-key>`
-- `contacts [company-id-or-key]`
-- `enrich company <company-id-or-key>`
-- `contact log <company-id-or-key> --channel <...> [--job <job-id>]`
-- `outcome log <company-id-or-key> --result <...> [--job <job-id>]`
-- `experiments`
-- `requeue <url> [lane]`
-- `sources test`
-- `sheet sync`
-- `sheet pull`
-- `stats`
-- `export json [path]`
+```bash
+node {baseDir}/scripts/run-sniper.mjs daily --refresh-profile
+```
 
-See `README.md` for setup, customization, workflow examples, privacy guidance, and configuration details.
+Rules:
+
+- find both jobs and cold-email targets
+- target Berlin onsite or hybrid and Germany remote
+- sync useful rows to Google Sheets
+- track only `found`, `applied`, and `contacted`
+- never send emails
+- never submit applications
+- never use dashboard state
+
+Useful variants:
+
+```bash
+node {baseDir}/scripts/run-sniper.mjs daily --json
+node {baseDir}/scripts/run-sniper.mjs daily --no-sheet
+node {baseDir}/scripts/run-sniper.mjs daily --no-auto-deep
+node {baseDir}/scripts/run-sniper.mjs daily --jobs 10 --companies 20
+```

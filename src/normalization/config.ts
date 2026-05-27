@@ -44,6 +44,13 @@ export const defaultConfig: SniperConfig = {
       { name: "Google Jobs Berlin AI", provider: "google_jobs", lane: "ai_coding_jobs", location: "Berlin", maxResults: 10 },
       { name: "Google Jobs Berlin Student", provider: "google_jobs", lane: "student_jobs", location: "Berlin", maxResults: 10 },
     ],
+    fundedBerlin: [
+      { name: "Handpicked Berlin Startup Scene", provider: "handpicked_berlin_index", url: "https://handpickedberlin.com/startups-berlin/", maxCompanies: 60 },
+      { name: "Handpicked Berlin Funded 2024", provider: "handpicked_berlin_article", url: "https://handpickedberlin.com/list-of-funded-startups-in-berlin-2024/", maxCompanies: 50 },
+      { name: "Project A Portfolio", provider: "vc_portfolio", url: "https://www.project-a.vc/companies/", maxCompanies: 45 },
+      { name: "Tech.eu Qontext", provider: "tech_eu_article", url: "https://tech.eu/2026/02/05/qontext-closes-27m-pre-seed-round-to-develop-a-context-layer-for-ai/", maxCompanies: 5 },
+      { name: "EU-Startups Patronus", provider: "eu_startups_article", url: "https://www.eu-startups.com/2026/04/berlin-based-patronus-raises-e11-million-for-senior-friendly-emergency-smartwatch-and-family-app/", maxCompanies: 5 },
+    ],
   },
   blacklist: {
     companies: [],
@@ -139,6 +146,7 @@ function mergeConfig(base: SniperConfig, overrides: ConfigOverrides): SniperConf
       rss: overrides.sources?.rss ?? base.sources.rss,
       atsBoards: overrides.sources?.atsBoards ?? base.sources.atsBoards,
       jobBoards: overrides.sources?.jobBoards ?? base.sources.jobBoards,
+      fundedBerlin: overrides.sources?.fundedBerlin ?? base.sources.fundedBerlin,
     },
     blacklist: {
       companies: overrides.blacklist?.companies ?? base.blacklist.companies,
@@ -296,6 +304,23 @@ function validateConfig(config: SniperConfig): SniperConfig {
     }
   }
 
+  for (const source of config.sources.fundedBerlin) {
+    if (
+      ![
+        "handpicked_berlin_index",
+        "handpicked_berlin_article",
+        "tech_eu_article",
+        "eu_startups_article",
+        "vc_portfolio",
+      ].includes(source.provider)
+    ) {
+      throw new SniperError(`Funded-startup source "${source.name}" has unsupported provider "${String(source.provider)}".`, "config_error");
+    }
+    if (source.maxCompanies !== undefined && (!Number.isFinite(source.maxCompanies) || source.maxCompanies <= 0)) {
+      throw new SniperError(`Funded-startup source "${source.name}" must set maxCompanies to a positive number.`, "config_error");
+    }
+  }
+
   return config;
 }
 
@@ -331,6 +356,7 @@ function migrateLegacyConfig(raw: Record<string, unknown>): ConfigOverrides {
         .map((entry) => ({ name: String(entry.name ?? entry.url), url: String(entry.url) })),
       atsBoards: defaultConfig.sources.atsBoards,
       jobBoards: defaultConfig.sources.jobBoards,
+      fundedBerlin: defaultConfig.sources.fundedBerlin,
     },
     blacklist: {
       companies: Array.isArray(blacklist.companies)

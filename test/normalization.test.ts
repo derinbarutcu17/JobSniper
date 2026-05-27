@@ -86,4 +86,17 @@ describe("early listing filter", () => {
     const decision = earlyFilterListing(config, profile, listing());
     expect(decision.keep).toBe(true);
   });
+
+  it("drops roles that already say applications are closed", () => {
+    const config = loadConfig(makeTempDir());
+    const decision = earlyFilterListing(
+      config,
+      profile,
+      listing({
+        description: "Hybrid design role in Berlin. No longer accepting applications.",
+      }),
+    );
+    expect(decision.keep).toBe(false);
+    expect(decision.reason).toBe("job_closed");
+  });
 });

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { google } from "googleapis";
 import { loadConfig } from "../normalization/config.js";
+import { normalizeUrl } from "../lib/url.js";
 import { getStoredSpreadsheetId, openDatabase, saveSpreadsheetState, updateJobManualFields } from "./db.js";
 import { companyOutreachSnapshotMap } from "./outreach-state.js";
 import { resolveCompanyBestContact } from "../ingestion/company-enrich.js";
@@ -16,6 +17,11 @@ export interface SheetGateway {
   writeSheet(spreadsheetId: string, title: string, rows: Row[], headers?: string[]): Promise<void>;
   listSheetTitles?(spreadsheetId: string): Promise<string[]>;
   deleteSheet?(spreadsheetId: string, title: string): Promise<void>;
+  formatDailySheet?(
+    spreadsheetId: string,
+    title: string,
+    options: { kind: "jobs" | "companies" | "contacts"; headers: string[]; rowCount: number },
+  ): Promise<void>;
 }
 
 const JOB_HEADERS = [
@@ -167,6 +173,170 @@ const JOB_MANUAL_COLUMNS = [
   "manual_contact_override",
 ] as const;
 
+const NON_COMPANY_HOSTS = new Set([
+  "linkedin.com",
+  "www.linkedin.com",
+  "de.linkedin.com",
+  "uk.linkedin.com",
+  "es.linkedin.com",
+  "ie.linkedin.com",
+  "wellfound.com",
+  "www.wellfound.com",
+  "github.com",
+  "www.github.com",
+]);
+
+function normalizeSheetText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function asNumber(value: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeSheetHost(value: string): string {
+  try {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    const parsed = trimmed.includes("://") ? new URL(trimmed) : null;
+    const host = (parsed?.hostname ?? trimmed).replace(/^www\./, "").toLowerCase().replace(/\/.*$/, "");
+    return NON_COMPANY_HOSTS.has(host) ? "" : host;
+  } catch {
+    const host = value.trim().toLowerCase().replace(/^www\./, "").replace(/\/.*$/, "");
+    return NON_COMPANY_HOSTS.has(host) ? "" : host;
+  }
+}
+
+function companySheetDedupeKey(company: Record<string, unknown>): string {
+  const host =
+    normalizeSheetHost(String(company.domain ?? "")) ||
+    normalizeSheetHost(String(company.company_url ?? "")) ||
+    normalizeSheetHost(String(company.careers_url ?? "")) ||
+    normalizeSheetHost(String(company.contact_url ?? ""));
+  if (host) return `domain:${host}`;
+  return `name:${normalizeSheetText(String(company.name ?? ""))}`;
+}
+
+function contactSheetValue(contact: Record<string, unknown>): string {
+  const email = String(contact.email ?? "").trim();
+  if (email) return email.toLowerCase();
+  const linkedinUrl = String(contact.linkedin_url ?? "").trim();
+  if (linkedinUrl) return normalizeUrl(linkedinUrl).toLowerCase();
+  const sourceUrl = String(contact.source_url ?? "").trim();
+  if (sourceUrl) return normalizeUrl(sourceUrl).toLowerCase();
+  return "";
+}
+
+function contactSheetDedupeKey(companyKey: string, contact: Record<string, unknown>): string {
+  return `${companyKey}::${normalizeSheetText(contactSheetValue(contact))}`;
+}
+
+function contactKindRank(kind: string): number {
+  switch (kind) {
+    case "founder_email":
+      return 8;
+    case "general_contact_email":
+      return 7;
+    case "recruiter_email":
+      return 6;
+    case "application_email":
+      return 5;
+    case "careers_email":
+      return 4;
+    case "team_page":
+      return 3;
+    case "contact_form":
+      return 2;
+    case "linkedin_person":
+      return 1;
+    case "linkedin_company":
+      return 0;
+    default:
+      return 1;
+  }
+}
+
+function outreachRank(status: string): number {
+  switch (status) {
+    case "applied":
+      return 5;
+    case "contacted":
+      return 4;
+    case "talking":
+      return 3;
+    case "sent_email":
+    case "reached":
+      return 2;
+    case "new":
+      return 1;
+    case "rejected":
+    case "archived":
+      return 0;
+    default:
+      return 1;
+  }
+}
+
+function stageRank(stage: string): number {
+  switch (normalizeSheetText(stage)) {
+    case "pre-seed":
+      return 6;
+    case "seed":
+      return 5;
+    case "series a":
+      return 4;
+    case "series b":
+      return 3;
+    case "growth":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+function hasMeaningfulCompanyRoute(company: Record<string, unknown>): boolean {
+  return [
+    String(company.company_url ?? ""),
+    String(company.careers_url ?? ""),
+    String(company.contact_url ?? ""),
+    String(company.about_url ?? ""),
+    String(company.team_url ?? ""),
+    String(company.press_url ?? ""),
+  ].some((value) => Boolean(normalizeSheetHost(value)));
+}
+
+function hasFundingSignal(company: Record<string, unknown>): boolean {
+  const stage = normalizeSheetText(String(company.stage_text ?? ""));
+  const startupScore = Number(company.startup_score ?? 0);
+  const companyFitScore = Number(company.company_fit_score ?? 0);
+  const hiringSignalScore = Number(company.hiring_signal_score ?? 0);
+  const priorityBand = normalizeSheetText(String(company.priority_band ?? ""));
+  const recommendation = normalizeSheetText(String(company.recommendation ?? ""));
+  const isStartupCandidate = Boolean(Number(company.is_startup_candidate ?? 0));
+  const openRoleCount = Number(company.open_role_count ?? 0);
+
+  return Boolean(
+    isStartupCandidate ||
+      openRoleCount > 0 ||
+      startupScore >= 60 ||
+      companyFitScore >= 60 ||
+      hiringSignalScore >= 40 ||
+      priorityBand === "high" ||
+      recommendation !== "watch" ||
+      stage === "pre-seed" ||
+      stage === "seed" ||
+      stage === "series a" ||
+      stage === "series b",
+  );
+}
+
+function shouldIncludeCompanyInSheet(company: Record<string, unknown>): boolean {
+  const hasDomain = Boolean(normalizeSheetHost(String(company.domain ?? "")));
+  if (hasDomain) return true;
+  return hasMeaningfulCompanyRoute(company) || hasFundingSignal(company);
+}
+
 function resolveSheetSettings(baseDir: string) {
   const config = loadConfig(baseDir);
   return {
@@ -206,6 +376,16 @@ function getGoogleAuth() {
 export class GoogleSheetGateway implements SheetGateway {
   private readonly sheets = google.sheets({ version: "v4", auth: getGoogleAuth() });
   private readonly drive = google.drive({ version: "v3", auth: getGoogleAuth() });
+
+  private async resolveSheetId(spreadsheetId: string, title: string): Promise<number> {
+    const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId });
+    const sheet = (spreadsheet.data.sheets ?? []).find((entry) => entry.properties?.title === title);
+    const sheetId = sheet?.properties?.sheetId;
+    if (sheetId === undefined || sheetId === null) {
+      throw new Error(`Sheet "${title}" was not found in spreadsheet ${spreadsheetId}.`);
+    }
+    return sheetId;
+  }
 
   async createSpreadsheet(title: string, folderId?: string): Promise<string> {
     const spreadsheet = await this.sheets.spreadsheets.create({
@@ -290,6 +470,188 @@ export class GoogleSheetGateway implements SheetGateway {
       requestBody: { values },
     });
   }
+
+  async formatDailySheet(
+    spreadsheetId: string,
+    title: string,
+    options: { kind: "jobs" | "companies" | "contacts"; headers: string[]; rowCount: number },
+  ): Promise<void> {
+    const sheetId = await this.resolveSheetId(spreadsheetId, title);
+    const columnCount = Math.max(options.headers.length, 1);
+    const rowCount = Math.max(options.rowCount + 1, 2);
+    const confidenceIndex = options.headers.indexOf("confidence_label");
+    const statusIndex = options.headers.indexOf("status");
+    const stageIndex = options.headers.indexOf("stage");
+    const bodyFontSize = options.kind === "jobs" ? 11 : options.kind === "companies" ? 10 : 9;
+    const bodyRowHeight = options.kind === "jobs" ? 28 : options.kind === "companies" ? 22 : 20;
+    const bodyWrapStrategy: "CLIP" | "WRAP" = options.kind === "jobs" ? "WRAP" : "CLIP";
+    const confidenceRules = confidenceIndex >= 0
+      ? [
+          { text: "high", color: { red: 0.85, green: 0.96, blue: 0.88 } },
+          { text: "good", color: { red: 0.9, green: 0.96, blue: 1 } },
+          { text: "maybe", color: { red: 1, green: 0.96, blue: 0.82 } },
+          { text: "low", color: { red: 1, green: 0.89, blue: 0.89 } },
+        ]
+      : [];
+    const statusRules = statusIndex >= 0
+      ? [
+          { text: "applied", color: { red: 0.87, green: 0.95, blue: 0.88 } },
+          { text: "contacted", color: { red: 0.92, green: 0.96, blue: 1 } },
+          { text: "found", color: { red: 1, green: 0.97, blue: 0.9 } },
+        ]
+      : [];
+    const stageRules = options.kind === "companies" && stageIndex >= 0
+      ? [
+          { text: "pre-seed", color: { red: 1, green: 0.94, blue: 0.84 } },
+          { text: "seed", color: { red: 0.9, green: 0.95, blue: 1 } },
+          { text: "series a", color: { red: 0.88, green: 0.96, blue: 0.93 } },
+          { text: "series b", color: { red: 0.92, green: 0.92, blue: 1 } },
+          { text: "growth", color: { red: 0.96, green: 0.93, blue: 1 } },
+        ]
+      : [];
+
+    await this.sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: {
+                sheetId,
+                gridProperties: {
+                  frozenRowCount: 1,
+                },
+              },
+              fields: "gridProperties.frozenRowCount",
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: columnCount },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: options.kind === "jobs"
+                    ? { red: 0.13, green: 0.28, blue: 0.51 }
+                    : options.kind === "companies"
+                      ? { red: 0.09, green: 0.39, blue: 0.31 }
+                      : { red: 0.26, green: 0.34, blue: 0.48 },
+                  textFormat: {
+                    foregroundColor: { red: 1, green: 1, blue: 1 },
+                    bold: true,
+                    fontSize: 12,
+                  },
+                  horizontalAlignment: "CENTER",
+                  verticalAlignment: "MIDDLE",
+                  wrapStrategy: "WRAP",
+                },
+              },
+              fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
+            },
+          },
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 1, endRowIndex: rowCount, startColumnIndex: 0, endColumnIndex: columnCount },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.985, green: 0.989, blue: 0.994 },
+                  textFormat: { fontSize: bodyFontSize },
+                  verticalAlignment: "TOP",
+                  wrapStrategy: bodyWrapStrategy,
+                },
+              },
+              fields: "userEnteredFormat(backgroundColor,textFormat,verticalAlignment,wrapStrategy)",
+            },
+          },
+          {
+            updateDimensionProperties: {
+              range: {
+                sheetId,
+                dimension: "ROWS",
+                startIndex: 0,
+                endIndex: 1,
+              },
+              properties: { pixelSize: 34 },
+              fields: "pixelSize",
+            },
+          },
+          {
+            updateDimensionProperties: {
+              range: {
+                sheetId,
+                dimension: "ROWS",
+                startIndex: 1,
+                endIndex: rowCount,
+              },
+              properties: { pixelSize: bodyRowHeight },
+              fields: "pixelSize",
+            },
+          },
+          {
+            setBasicFilter: {
+              filter: {
+                range: { sheetId, startRowIndex: 0, endRowIndex: rowCount, startColumnIndex: 0, endColumnIndex: columnCount },
+              },
+            },
+          },
+          {
+            autoResizeDimensions: {
+              dimensions: {
+                sheetId,
+                dimension: "COLUMNS",
+                startIndex: 0,
+                endIndex: columnCount,
+              },
+            },
+          },
+          ...confidenceRules.map((rule) => ({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, endRowIndex: rowCount, startColumnIndex: confidenceIndex, endColumnIndex: confidenceIndex + 1 }],
+                booleanRule: {
+                  condition: {
+                    type: "TEXT_EQ",
+                    values: [{ userEnteredValue: rule.text }],
+                  },
+                  format: { backgroundColor: rule.color },
+                },
+              },
+              index: 0,
+            },
+          })),
+          ...statusRules.map((rule) => ({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, endRowIndex: rowCount, startColumnIndex: statusIndex, endColumnIndex: statusIndex + 1 }],
+                booleanRule: {
+                  condition: {
+                    type: "TEXT_EQ",
+                    values: [{ userEnteredValue: rule.text }],
+                  },
+                  format: { backgroundColor: rule.color, textFormat: { bold: true } },
+                },
+              },
+              index: 0,
+            },
+          })),
+          ...stageRules.map((rule) => ({
+            addConditionalFormatRule: {
+              rule: {
+                ranges: [{ sheetId, startRowIndex: 1, endRowIndex: rowCount, startColumnIndex: stageIndex, endColumnIndex: stageIndex + 1 }],
+                booleanRule: {
+                  condition: {
+                    type: "TEXT_EQ",
+                    values: [{ userEnteredValue: rule.text }],
+                  },
+                  format: { backgroundColor: rule.color },
+                },
+              },
+              index: 0,
+            },
+          })),
+        ],
+      },
+    });
+  }
 }
 
 function shortExplanation(job: JobRecord): string {
@@ -344,93 +706,151 @@ function scoreContactForCompany(
   });
 }
 
-function jobRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
+function jobRows(db: ReturnType<typeof openDatabase>["db"], maxRows = 200): Row[] {
   const companyOutreach = companyOutreachSnapshotMap(db);
   const jobs = db
-    .prepare("SELECT * FROM jobs WHERE status != 'excluded' ORDER BY score DESC, updated_at DESC")
-    .all() as JobRecord[];
-  return jobs.map((job) => ({
-    canonical_key: job.canonical_key,
-    title: job.title,
-    title_family: job.title_family,
-    company_name: job.company_name,
-    lane: job.lane,
-    source: job.source,
-    source_type: job.source_type,
-    is_real_job_page: String(job.is_real_job_page ?? 0),
-    parse_confidence: String(job.parse_confidence ?? 0),
-    source_confidence: String(job.source_confidence ?? 0),
-    location: job.location,
-    country: job.country,
-    language: job.language,
-    work_model: job.work_model,
-    employment_type: job.employment_type,
-    posted_at: job.posted_at,
-    last_seen_at: job.last_seen_at,
-    score: String(job.score),
-    eligibility: job.eligibility,
-    category: job.category,
-    recommendation: job.recommendation || "watch",
-    recommendation_reason: job.recommendation_reason || "",
-    recommended_route: job.recommended_route || "no_action",
-    route_confidence: String(job.route_confidence ?? 0),
-    route_rationale: job.route_rationale || "",
-    pitch_theme: job.pitch_theme || "",
-    pitch_angle: job.pitch_angle || "",
-    strongest_profile_signal: job.strongest_profile_signal || "",
-    strongest_company_signal: job.strongest_company_signal || "",
-    outreach_leverage_score: String(job.outreach_leverage_score ?? 0),
-    interview_probability_band: job.interview_probability_band || "low",
-    opportunity_cost_band: job.opportunity_cost_band || "medium",
-    company_fit_score: String(job.company_fit_score ?? 0),
-    startup_fit_score: String(job.startup_fit_score),
-    contactability_score: String(job.contactability_score),
-    url: job.url,
-    apply_url: job.apply_url,
-    best_contact: bestContact(job),
-    pipeline_status: job.pipeline_status || "discovered",
-    company_outreach_status: companyOutreach.get(Number(job.company_id ?? 0))?.status ?? "new",
-    explanation_short: shortExplanation(job),
-    manual_status: job.manual_status || "",
-    priority: job.priority || "",
-    outreach_state: job.outreach_state || "",
-    owner_notes: job.owner_notes || "",
-    manual_contact_override: job.manual_contact_override || "",
-  }));
+    .prepare(`
+      SELECT * FROM jobs
+      WHERE status != 'excluded'
+        AND last_seen_at >= datetime('now', '-90 days')
+      ORDER BY score DESC, updated_at DESC
+      LIMIT ?
+    `)
+    .all(maxRows) as JobRecord[];
+  const RESOLVED = new Set(["applied", "contacted", "talking", "rejected", "archived"]);
+  return jobs
+    .map((job) => ({
+      canonical_key: job.canonical_key,
+      title: job.title,
+      title_family: job.title_family,
+      company_name: job.company_name,
+      lane: job.lane,
+      source: job.source,
+      source_type: job.source_type,
+      is_real_job_page: String(job.is_real_job_page ?? 0),
+      parse_confidence: String(job.parse_confidence ?? 0),
+      source_confidence: String(job.source_confidence ?? 0),
+      location: job.location,
+      country: job.country,
+      language: job.language,
+      work_model: job.work_model,
+      employment_type: job.employment_type,
+      posted_at: job.posted_at,
+      last_seen_at: job.last_seen_at,
+      score: String(job.score),
+      eligibility: job.eligibility,
+      category: job.category,
+      recommendation: job.recommendation || "watch",
+      recommendation_reason: job.recommendation_reason || "",
+      recommended_route: job.recommended_route || "no_action",
+      route_confidence: String(job.route_confidence ?? 0),
+      route_rationale: job.route_rationale || "",
+      pitch_theme: job.pitch_theme || "",
+      pitch_angle: job.pitch_angle || "",
+      strongest_profile_signal: job.strongest_profile_signal || "",
+      strongest_company_signal: job.strongest_company_signal || "",
+      outreach_leverage_score: String(job.outreach_leverage_score ?? 0),
+      interview_probability_band: job.interview_probability_band || "low",
+      opportunity_cost_band: job.opportunity_cost_band || "medium",
+      company_fit_score: String(job.company_fit_score ?? 0),
+      startup_fit_score: String(job.startup_fit_score),
+      contactability_score: String(job.contactability_score),
+      url: job.url,
+      apply_url: job.apply_url,
+      best_contact: bestContact(job),
+      pipeline_status: job.pipeline_status || "discovered",
+      company_outreach_status: companyOutreach.get(Number(job.company_id ?? 0))?.status ?? "new",
+      explanation_short: shortExplanation(job),
+      manual_status: job.manual_status || "",
+      priority: job.priority || "",
+      outreach_state: job.outreach_state || "",
+      owner_notes: job.owner_notes || "",
+      manual_contact_override: job.manual_contact_override || "",
+    }))
+    .filter((row) => !RESOLVED.has(row.company_outreach_status));
 }
 
-function companyRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
+function dedupeCompanyContacts(
+  company: Record<string, unknown>,
+  contacts: Array<Record<string, unknown>>,
+  limit = 2,
+): Array<Record<string, unknown>> {
+  const companyKey = companySheetDedupeKey(company);
+  const ranked = [...contacts]
+    .filter((contact) => contactSheetValue(contact))
+    .sort((left, right) => {
+      const scoreDelta = scoreContactForCompany(company, right) - scoreContactForCompany(company, left);
+      if (scoreDelta !== 0) return scoreDelta;
+      const updatedDelta = String(right.updated_at ?? "").localeCompare(String(left.updated_at ?? ""));
+      if (updatedDelta !== 0) return updatedDelta;
+      return contactKindRank(String(right.contact_kind ?? "")) - contactKindRank(String(left.contact_kind ?? ""));
+    });
+
+  const deduped = new Map<string, Record<string, unknown>>();
+  for (const contact of ranked) {
+    const key = contactSheetDedupeKey(companyKey, contact);
+    if (!deduped.has(key)) {
+      deduped.set(key, contact);
+    }
+  }
+
+  const uniqueContacts = [...deduped.values()];
+  const hasNonLinkedIn = uniqueContacts.some((contact) => !String(contact.contact_kind ?? "").startsWith("linkedin"));
+  const filtered = hasNonLinkedIn
+    ? uniqueContacts.filter((contact) => !String(contact.contact_kind ?? "").startsWith("linkedin"))
+    : uniqueContacts
+        .filter((contact) => String(contact.contact_kind ?? "").startsWith("linkedin"))
+        .slice(0, 2)
+        .concat(uniqueContacts.filter((contact) => !String(contact.contact_kind ?? "").startsWith("linkedin")));
+
+  return filtered
+    .sort((left, right) => {
+      const scoreDelta = scoreContactForCompany(company, right) - scoreContactForCompany(company, left);
+      if (scoreDelta !== 0) return scoreDelta;
+      const kindDelta = contactKindRank(String(right.contact_kind ?? "")) - contactKindRank(String(left.contact_kind ?? ""));
+      if (kindDelta !== 0) return kindDelta;
+      return String(right.updated_at ?? "").localeCompare(String(left.updated_at ?? ""));
+    })
+    .slice(0, limit);
+}
+
+function bestCompanyContact(company: Record<string, unknown>, contacts: Array<Record<string, unknown>>): string {
+  const preferred = [...contacts].sort(
+    (left, right) => scoreContactForCompany(company, right) - scoreContactForCompany(company, left),
+  )[0];
+  if (preferred) {
+    return String(preferred.email ?? preferred.linkedin_url ?? preferred.source_url ?? "");
+  }
+  return resolveCompanyBestContact(company);
+}
+
+type CompanySheetEntry = {
+  company: Record<string, unknown>;
+  companyId: number;
+  companyContacts: Array<Record<string, unknown>>;
+  bestContact: string;
+  outreachStatus: string;
+  lastContactChannel: string;
+  latestActivityAt: string;
+  latestStatusNote: string;
+  directContactCount: number;
+  contactabilityScore: number;
+  stageText: string;
+  priorityBand: string;
+  confidence: number;
+};
+
+function companySheetEntries(db: ReturnType<typeof openDatabase>["db"]): CompanySheetEntry[] {
   const outreach = companyOutreachSnapshotMap(db);
-  const companies = db
-    .prepare(`
-      SELECT *
-      FROM companies
-      ORDER BY
-        CASE priority_band WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC,
-        CASE recommendation WHEN 'cold_email' THEN 4 WHEN 'apply_now' THEN 3 WHEN 'enrich_first' THEN 2 WHEN 'watch' THEN 1 ELSE 0 END DESC,
-        startup_score DESC,
-        company_fit_score DESC,
-        updated_at DESC
-    `)
-    .all() as Array<Record<string, unknown>>;
+  const companies = db.prepare("SELECT * FROM companies").all() as Array<Record<string, unknown>>;
   const contacts = db
     .prepare(`
-      SELECT company_id, email, linkedin_url, source_url, contact_kind, confidence
-      FROM contacts
-      ORDER BY
-        CASE contact_kind
-          WHEN 'general_contact_email' THEN 6
-          WHEN 'founder_email' THEN 5
-          WHEN 'recruiter_email' THEN 4
-          WHEN 'application_email' THEN 3
-          WHEN 'careers_email' THEN 2
-          WHEN 'linkedin_person' THEN 1
-          ELSE 0
-        END DESC,
-        CASE confidence WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC,
-        updated_at DESC
+      SELECT ct.*, c.name AS company_name, c.domain AS company_domain, c.company_url AS company_url
+      FROM contacts ct
+      LEFT JOIN companies c ON c.id = ct.company_id
     `)
     .all() as Array<Record<string, unknown>>;
+
   const contactsByCompanyId = new Map<number, Array<Record<string, unknown>>>();
   for (const contact of contacts) {
     const companyId = Number(contact.company_id ?? 0);
@@ -440,89 +860,164 @@ function companyRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
     contactsByCompanyId.set(companyId, rows);
   }
 
-  return companies.map((company) => ({
-    canonical_key: String(company.canonical_key ?? ""),
-    name: String(company.name ?? ""),
-    domain: String(company.domain ?? ""),
-    location: String(company.location ?? ""),
-    recommendation: String(company.recommendation ?? "watch"),
-    recommendation_reason: String(company.recommendation_reason ?? ""),
-    best_route: String(company.best_route ?? "watch_company"),
-    priority_band: String(company.priority_band ?? "low"),
-    reachable_now: String(company.reachable_now ?? 0),
-    open_role_count: String(company.open_role_count ?? 0),
-    direct_contact_count: String(company.direct_contact_count ?? 0),
-    startup_score: String(company.startup_score ?? 0),
-    company_fit_score: String(company.company_fit_score ?? 0),
-    hiring_signal_score: String(company.hiring_signal_score ?? 0),
-    contactability_score: String(company.contactability_score ?? 0),
-    is_startup_candidate: String(company.is_startup_candidate ?? 0),
-    pitch_theme: String(company.pitch_theme ?? ""),
-    pitch_angle: String(company.pitch_angle ?? ""),
-    pitch_evidence: parseJsonList(String(company.pitch_evidence ?? "[]")).join(" | "),
-    startup_signals: parseJsonList(String(company.startup_signals ?? "[]")).join(" | "),
-    hiring_signals: parseJsonList(String(company.hiring_signals ?? "[]")).join(" | "),
-    founder_names: parseJsonList(String(company.founder_names ?? "[]")).join(" | "),
-    stage_text: String(company.stage_text ?? ""),
-    size_band: String(company.size_band ?? ""),
-    remote_policy: String(company.remote_policy ?? ""),
-    company_url: String(company.company_url ?? ""),
-    careers_url: String(company.careers_url ?? ""),
-    about_url: String(company.about_url ?? ""),
-    team_url: String(company.team_url ?? ""),
-    contact_url: String(company.contact_url ?? ""),
-    press_url: String(company.press_url ?? ""),
-    linkedin_url: String(company.linkedin_url ?? ""),
-    best_contact:
-      (() => {
-        const companyContacts = contactsByCompanyId.get(Number(company.id ?? 0)) ?? [];
-        const preferred = [...companyContacts].sort(
-          (left, right) => scoreContactForCompany(company, right) - scoreContactForCompany(company, left),
-        )[0];
-        if (preferred) {
-          return String(preferred.email ?? preferred.linkedin_url ?? preferred.source_url ?? "");
-        }
-        return resolveCompanyBestContact(company);
-      })(),
-    outreach_status: outreach.get(Number(company.id ?? 0))?.status ?? "new",
-    last_contact_channel: outreach.get(Number(company.id ?? 0))?.lastContactChannel ?? "",
-    latest_activity_at: outreach.get(Number(company.id ?? 0))?.latestActivityAt ?? "",
-    latest_status_note: outreach.get(Number(company.id ?? 0))?.latestNote ?? "",
-    source_urls: parseJsonList(String(company.source_urls ?? "[]")).join(" | "),
-    description: String(company.description ?? ""),
+  const rankedCompanies = companies
+    .map((company) => {
+      const companyId = Number(company.id ?? 0);
+      const outreachSnapshot = outreach.get(companyId);
+      const companyContacts = dedupeCompanyContacts(company, contactsByCompanyId.get(companyId) ?? []);
+      const directContactCount = companyContacts.filter((contact) => Boolean(String(contact.email ?? "").trim())).length;
+      const bestContact = bestCompanyContact(company, companyContacts);
+      return {
+        company,
+        companyId,
+        companyContacts,
+        bestContact,
+        outreachStatus: outreachSnapshot?.status ?? "new",
+        lastContactChannel: outreachSnapshot?.lastContactChannel ?? "",
+        latestActivityAt: outreachSnapshot?.latestActivityAt ?? "",
+        latestStatusNote: outreachSnapshot?.latestNote ?? "",
+        directContactCount,
+        contactabilityScore: Number(company.contactability_score ?? 0),
+        stageText: String(company.stage_text ?? ""),
+        priorityBand: String(company.priority_band ?? "low"),
+        confidence: Number(company.company_fit_score ?? 0),
+      };
+    })
+    .sort((left, right) => {
+      const outreachDelta = outreachRank(right.outreachStatus) - outreachRank(left.outreachStatus);
+      if (outreachDelta !== 0) return outreachDelta;
+      const directDelta = right.directContactCount - left.directContactCount;
+      if (directDelta !== 0) return directDelta;
+      const contactabilityDelta = right.contactabilityScore - left.contactabilityScore;
+      if (contactabilityDelta !== 0) return contactabilityDelta;
+      const stageDelta = stageRank(right.stageText) - stageRank(left.stageText);
+      if (stageDelta !== 0) return stageDelta;
+      const priorityWeight = (value: string) => (value === "high" ? 3 : value === "medium" ? 2 : 1);
+      const priorityDelta = priorityWeight(right.priorityBand) - priorityWeight(left.priorityBand);
+      if (priorityDelta !== 0) return priorityDelta;
+      const confidenceDelta = right.confidence - left.confidence;
+      if (confidenceDelta !== 0) return confidenceDelta;
+      return normalizeSheetText(String(left.company.name ?? "")).localeCompare(normalizeSheetText(String(right.company.name ?? "")));
+    });
+
+  const RESOLVED = new Set(["applied", "contacted", "sent_email", "talking", "rejected", "archived"]);
+  const activeCompanies = rankedCompanies.filter((entry) => !RESOLVED.has(entry.outreachStatus));
+  const includedCompanies = activeCompanies.filter((entry) => shouldIncludeCompanyInSheet(entry.company));
+
+  const dedupedCompanies = new Map<string, (typeof includedCompanies)[number]>();
+  for (const entry of includedCompanies) {
+    const key = companySheetDedupeKey(entry.company);
+    if (!dedupedCompanies.has(key)) {
+      dedupedCompanies.set(key, entry);
+    }
+  }
+
+  return [...dedupedCompanies.values()].sort((left, right) => {
+      const stageDelta = stageRank(right.stageText) - stageRank(left.stageText);
+      if (stageDelta !== 0) return stageDelta;
+      const priorityWeight = (value: string) => (value === "high" ? 3 : value === "medium" ? 2 : 1);
+      const priorityDelta = priorityWeight(right.priorityBand) - priorityWeight(left.priorityBand);
+      if (priorityDelta !== 0) return priorityDelta;
+      const contactabilityDelta = right.contactabilityScore - left.contactabilityScore;
+      if (contactabilityDelta !== 0) return contactabilityDelta;
+      return normalizeSheetText(String(left.company.name ?? "")).localeCompare(normalizeSheetText(String(right.company.name ?? "")));
+  });
+}
+
+function companyRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
+  return companySheetEntries(db).map((entry) => ({
+    canonical_key: String(entry.company.canonical_key ?? ""),
+    name: String(entry.company.name ?? ""),
+    domain: String(entry.company.domain ?? ""),
+    location: String(entry.company.location ?? ""),
+    recommendation: String(entry.company.recommendation ?? "watch"),
+    recommendation_reason: String(entry.company.recommendation_reason ?? ""),
+    best_route: String(entry.company.best_route ?? "watch_company"),
+    priority_band: String(entry.priorityBand ?? "low"),
+    reachable_now: String(entry.company.reachable_now ?? 0),
+    open_role_count: String(entry.company.open_role_count ?? 0),
+    direct_contact_count: String(entry.directContactCount ?? 0),
+    startup_score: String(entry.company.startup_score ?? 0),
+    company_fit_score: String(entry.company.company_fit_score ?? 0),
+    hiring_signal_score: String(entry.company.hiring_signal_score ?? 0),
+    contactability_score: String(entry.company.contactability_score ?? 0),
+    is_startup_candidate: String(entry.company.is_startup_candidate ?? 0),
+    pitch_theme: String(entry.company.pitch_theme ?? ""),
+    pitch_angle: String(entry.company.pitch_angle ?? ""),
+    pitch_evidence: parseJsonList(String(entry.company.pitch_evidence ?? "[]")).join(" | "),
+    startup_signals: parseJsonList(String(entry.company.startup_signals ?? "[]")).join(" | "),
+    hiring_signals: parseJsonList(String(entry.company.hiring_signals ?? "[]")).join(" | "),
+    founder_names: parseJsonList(String(entry.company.founder_names ?? "[]")).join(" | "),
+    stage_text: String(entry.stageText ?? ""),
+    size_band: String(entry.company.size_band ?? ""),
+    remote_policy: String(entry.company.remote_policy ?? ""),
+    company_url: String(entry.company.company_url ?? ""),
+    careers_url: String(entry.company.careers_url ?? ""),
+    about_url: String(entry.company.about_url ?? ""),
+    team_url: String(entry.company.team_url ?? ""),
+    contact_url: String(entry.company.contact_url ?? ""),
+    press_url: String(entry.company.press_url ?? ""),
+    linkedin_url: String(entry.company.linkedin_url ?? ""),
+    best_contact: entry.bestContact,
+    outreach_status: entry.outreachStatus,
+    last_contact_channel: entry.lastContactChannel,
+    latest_activity_at: entry.latestActivityAt,
+    latest_status_note: entry.latestStatusNote,
+    source_urls: parseJsonList(String(entry.company.source_urls ?? "[]")).join(" | "),
+    description: String(entry.company.description ?? ""),
   }));
 }
 
 function contactRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
-  const contacts = db
-    .prepare(`
-      SELECT ct.*, c.name AS company_name
-      FROM contacts ct
-      LEFT JOIN companies c ON c.id = ct.company_id
-      ORDER BY
-        CASE ct.confidence WHEN 'high' THEN 4 WHEN 'medium' THEN 3 WHEN 'low' THEN 2 ELSE 1 END DESC,
-        ct.updated_at DESC
-    `)
-    .all() as Array<Record<string, unknown>>;
+  const entries = companySheetEntries(db);
+  const companyOrder = new Map<string, number>();
+  const companyByKey = new Map<string, Record<string, unknown>>();
+  const selectedContactsByCompanyKey = new Map<string, Array<Record<string, unknown>>>();
 
-  return contacts.map((contact) => ({
-    canonical_key: String(contact.canonical_key ?? ""),
-    company_name: String(contact.company_name ?? ""),
-    kind: String(contact.contact_kind || contact.kind || (contact.email ? "general_contact_email" : contact.linkedin_url ? "linkedin_company" : "contact_form")),
-    confidence: String(contact.confidence ?? ""),
-    name: String(contact.name ?? ""),
-    title: String(contact.title ?? ""),
-    email: String(contact.email ?? ""),
-    linkedin_url: String(contact.linkedin_url ?? ""),
-    source_url: String(contact.source_url ?? ""),
-    page_type: String(contact.page_type ?? ""),
-    evidence_type: String(contact.evidence_type ?? ""),
-    evidence_excerpt: String(contact.evidence_excerpt ?? ""),
-    is_public: String(contact.is_public ?? 1),
-    last_verified_at: String(contact.last_verified_at ?? ""),
-    last_seen_at: String(contact.last_seen_at ?? ""),
-    notes: String(contact.notes ?? ""),
-  }));
+  entries.forEach((entry, index) => {
+    const key = companySheetDedupeKey(entry.company);
+    companyOrder.set(key, index);
+    companyByKey.set(key, entry.company);
+    selectedContactsByCompanyKey.set(key, entry.companyContacts);
+  });
+
+  const rows: Row[] = [];
+  for (const [companyKey, contactRowsForCompany] of selectedContactsByCompanyKey.entries()) {
+    for (const contact of contactRowsForCompany) {
+      rows.push({
+        canonical_key: String(contact.canonical_key ?? ""),
+        company_name: String(contact.company_name ?? String(companyByKey.get(companyKey)?.name ?? "")),
+        kind: String(contact.contact_kind || contact.kind || (contact.email ? "general_contact_email" : contact.linkedin_url ? "linkedin_company" : "contact_form")),
+        confidence: String(contact.confidence ?? ""),
+        name: String(contact.name ?? ""),
+        title: String(contact.title ?? ""),
+        email: String(contact.email ?? ""),
+        linkedin_url: String(contact.linkedin_url ?? ""),
+        source_url: String(contact.source_url ?? ""),
+        page_type: String(contact.page_type ?? ""),
+        evidence_type: String(contact.evidence_type ?? ""),
+        evidence_excerpt: String(contact.evidence_excerpt ?? ""),
+        is_public: String(contact.is_public ?? 1),
+        last_verified_at: String(contact.last_verified_at ?? ""),
+        last_seen_at: String(contact.last_seen_at ?? ""),
+        notes: String(contact.notes ?? ""),
+        company_order: String(companyOrder.get(companyKey) ?? 0),
+        contact_rank: String(contactKindRank(String(contact.contact_kind ?? ""))),
+      });
+    }
+  }
+
+  return rows
+    .sort((left, right) => {
+      const companyDelta = asNumber(left.company_order) - asNumber(right.company_order);
+      if (companyDelta !== 0) return companyDelta;
+      const rankDelta = asNumber(right.contact_rank) - asNumber(left.contact_rank);
+      if (rankDelta !== 0) return rankDelta;
+      const confidenceDelta = asNumber(right.is_public) - asNumber(left.is_public);
+      if (confidenceDelta !== 0) return confidenceDelta;
+      return String(right.last_verified_at ?? "").localeCompare(String(left.last_verified_at ?? ""));
+    })
+    .map(({ company_order: _companyOrder, contact_rank: _contactRank, ...row }) => row);
 }
 
 function runMetricRows(db: ReturnType<typeof openDatabase>["db"]): Row[] {
@@ -589,68 +1084,6 @@ function mergeManualColumns(localRows: Row[], existingRows: Row[]): Row[] {
   });
 }
 
-function dayKey(value: string): string {
-  const match = value.match(/^\d{4}-\d{2}-\d{2}/);
-  return match ? match[0] : "unknown-date";
-}
-
-function dailyJobTabs(
-  db: ReturnType<typeof openDatabase>["db"],
-  prefix = "Jobs ",
-): Array<{ title: string; rows: Row[] }> {
-  const companyOutreach = companyOutreachSnapshotMap(db);
-  const jobs = db
-    .prepare("SELECT * FROM jobs WHERE status != 'excluded' ORDER BY created_at DESC, updated_at DESC")
-    .all() as JobRecord[];
-
-  const groups = new Map<string, JobRecord[]>();
-  for (const job of jobs) {
-    const key = dayKey(job.posted_at || job.created_at || job.updated_at || "");
-    const rows = groups.get(key) ?? [];
-    rows.push(job);
-    groups.set(key, rows);
-  }
-
-  return Array.from(groups.entries())
-    .sort(([left], [right]) => right.localeCompare(left))
-    .map(([date, rows]) => ({
-      title: `${prefix}${date}`.slice(0, 100),
-      rows: rows.map((job) => ({
-        canonical_key: job.canonical_key,
-        title: job.title,
-        title_family: job.title_family,
-        company_name: job.company_name,
-        lane: job.lane,
-        score: String(job.score),
-        eligibility: job.eligibility,
-        category: job.category,
-        recommendation: job.recommendation || "watch",
-        recommended_route: job.recommended_route || "no_action",
-        route_confidence: String(job.route_confidence ?? 0),
-        pitch_theme: job.pitch_theme || "",
-        pitch_angle: job.pitch_angle || "",
-        outreach_leverage_score: String(job.outreach_leverage_score ?? 0),
-        interview_probability_band: job.interview_probability_band || "low",
-        opportunity_cost_band: job.opportunity_cost_band || "medium",
-        startup_fit_score: String(job.startup_fit_score),
-        contactability_score: String(job.contactability_score),
-        location: job.location,
-        work_model: job.work_model,
-        posted_at: job.posted_at,
-        url: job.url,
-        best_contact: bestContact(job),
-        pipeline_status: job.pipeline_status || "discovered",
-        company_outreach_status: companyOutreach.get(Number(job.company_id ?? 0))?.status ?? "new",
-        explanation_short: shortExplanation(job),
-        manual_status: job.manual_status || "",
-        priority: job.priority || "",
-        outreach_state: job.outreach_state || "",
-        owner_notes: job.owner_notes || "",
-        manual_contact_override: job.manual_contact_override || "",
-      })),
-    }));
-}
-
 export async function syncSheets(
   baseDir: string,
   gateway: SheetGateway = new GoogleSheetGateway(),
@@ -681,27 +1114,32 @@ export async function syncSheets(
     await gateway.writeSheet(spreadsheetId, settings.tabs.jobs, mergedJobs, [...JOB_HEADERS]);
     await gateway.writeSheet(spreadsheetId, settings.tabs.runMetrics, runMetricRows(db), [...RUN_METRIC_HEADERS]);
 
-    const dailyTabs = dailyJobTabs(db, settings.tabs.dailyJobsPrefix ?? "Jobs ");
-    for (const tab of dailyTabs) {
-      await gateway.ensureSheet(spreadsheetId, tab.title);
-      await gateway.writeSheet(spreadsheetId, tab.title, tab.rows, [...JOB_HEADERS]);
-    }
-
+    const jobsPrefix = settings.tabs.dailyJobsPrefix ?? "Jobs ";
     if (gateway.listSheetTitles && gateway.deleteSheet) {
       const existingTitles = await gateway.listSheetTitles(spreadsheetId);
-      const liveDailyTitles = new Set(dailyTabs.map((tab) => tab.title));
-      const jobsPrefix = settings.tabs.dailyJobsPrefix ?? "Jobs ";
       for (const title of existingTitles) {
         if (title === settings.tabs.jobs) continue;
-        if (title.startsWith(jobsPrefix) && !liveDailyTitles.has(title)) {
+        if (title.startsWith(jobsPrefix)) {
           await gateway.deleteSheet(spreadsheetId, title);
         }
       }
     }
   }
 
-  await gateway.writeSheet(spreadsheetId, settings.tabs.companies, companyRows(db), [...COMPANY_HEADERS]);
-  await gateway.writeSheet(spreadsheetId, settings.tabs.contacts, contactRows(db), [...CONTACT_HEADERS]);
+  const companies = companyRows(db);
+  const contacts = contactRows(db);
+  await gateway.writeSheet(spreadsheetId, settings.tabs.companies, companies, [...COMPANY_HEADERS]);
+  await gateway.writeSheet(spreadsheetId, settings.tabs.contacts, contacts, [...CONTACT_HEADERS]);
+  await gateway.formatDailySheet?.(spreadsheetId, settings.tabs.companies, {
+    kind: "companies",
+    headers: [...COMPANY_HEADERS],
+    rowCount: companies.length,
+  });
+  await gateway.formatDailySheet?.(spreadsheetId, settings.tabs.contacts, {
+    kind: "contacts",
+    headers: [...CONTACT_HEADERS],
+    rowCount: contacts.length,
+  });
 
   saveSpreadsheetState(db, spreadsheetId, {
     lastSyncAt: new Date().toISOString(),

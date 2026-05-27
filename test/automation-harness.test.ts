@@ -438,8 +438,8 @@ describe("cron wrapper", () => {
     const scriptPath = path.join(import.meta.dirname, "..", "scripts", "hermes-daily-run.sh");
     const content = fs.readFileSync(scriptPath, "utf8");
 
-    // Should call automate daily exactly once
-    const matches = content.match(/automate daily/g);
+    // Should call the new daily command exactly once
+    const matches = content.match(/npm run sniper -- daily/g);
     expect(matches?.length).toBe(1);
 
     // Should not call the old multi-command chain
@@ -457,20 +457,16 @@ describe("cron wrapper", () => {
     expect(content).toContain("SNIPER_DAILY_TIMEOUT");
   });
 
-  it("syncs projections after the main command", () => {
+  it("does not depend on dashboard or projection sync after the main command", () => {
     const scriptPath = path.join(import.meta.dirname, "..", "scripts", "hermes-daily-run.sh");
     const content = fs.readFileSync(scriptPath, "utf8");
 
-    const automateIndex = content.indexOf("automate daily");
+    const automateIndex = content.indexOf("npm run sniper -- daily");
     const sheetSyncIndex = content.indexOf("sheet sync");
     const liveSyncIndex = content.indexOf("live:sync");
 
     expect(automateIndex).toBeGreaterThan(0);
-    if (sheetSyncIndex > 0) {
-      expect(sheetSyncIndex).toBeGreaterThan(automateIndex);
-    }
-    if (liveSyncIndex > 0) {
-      expect(liveSyncIndex).toBeGreaterThan(automateIndex);
-    }
+    expect(sheetSyncIndex).toBe(-1);
+    expect(liveSyncIndex).toBe(-1);
   });
 });

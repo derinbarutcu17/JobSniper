@@ -1,5 +1,7 @@
 # Hermes Operations Guide for Job Sniper
 
+Legacy note: the repo now operates primarily through `npm run sniper -- daily`. This document is retained for debugging older automation chains and should not be treated as the main operating manual.
+
 ## Purpose
 
 This guide tells Hermes how to run the combined Job Sniper reliably, safely, and usefully on a schedule.

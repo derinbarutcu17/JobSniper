@@ -6,7 +6,7 @@ Use this note as the working source of truth for Job Sniper in the next chat.
 
 ## What Job Sniper Is
 
-- Repo: `/Users/derin/Desktop/CODING/Job sniper`
+- Repo: `<repo-root>`
 - Purpose: local-first job and company intelligence engine
 - Core job: discover opportunities, score them, decide what matters, and keep outreach state in sync
 - It is not a generic CRM and not an auto-apply tool
@@ -15,7 +15,7 @@ Use this note as the working source of truth for Job Sniper in the next chat.
 ## Canonical State
 
 - SQLite is the only canonical writable state
-- Main database: `/Users/derin/Desktop/CODING/Job sniper/data/sniper.db`
+- Main database: `data/sniper.db`
 - Everything else is a projection or export:
   - live dashboard repo
   - Google Sheets
@@ -23,7 +23,7 @@ Use this note as the working source of truth for Job Sniper in the next chat.
 
 ## Live Mirrors
 
-- Private live dashboard repo: `/Users/derin/Desktop/CODING/jobsniper-live`
+- Private live dashboard repo: `<live-mirror-repo>`
 - Do not edit dashboard data there manually
 - Refresh it from the main repo with:
   - `npm run live:sync`
@@ -34,24 +34,24 @@ Use this note as the working source of truth for Job Sniper in the next chat.
 Important paths in the main repo:
 
 - CLI and app shell:
-  - `/Users/derin/Desktop/CODING/Job sniper/src/presentation/cli.ts`
-  - `/Users/derin/Desktop/CODING/Job sniper/src/presentation/app.ts`
+  - `src/presentation/cli.ts`
+  - `src/presentation/app.ts`
 - Discovery and scraping:
-  - `/Users/derin/Desktop/CODING/Job sniper/src/ingestion/search/*`
+  - `src/ingestion/search/*`
 - Scoring and judgment:
-  - `/Users/derin/Desktop/CODING/Job sniper/src/normalization/*`
+  - `src/normalization/*`
 - Persistence and services:
-  - `/Users/derin/Desktop/CODING/Job sniper/src/state/*`
+  - `src/state/*`
 - Reports and exports:
-  - `/Users/derin/Desktop/CODING/Job sniper/scripts/export-dashboard-data.ts`
-  - `/Users/derin/Desktop/CODING/Job sniper/scripts/sync-live-state.mjs`
+  - `scripts/export-dashboard-data.ts`
+  - `scripts/sync-live-state.mjs`
 
 ## Current Operating Rules
 
 - Keep already-reached and applied company lists deduped
 - Do not let historical draft or prep logs create duplicate outreach rows unless they are genuinely separate later actions
 - For applied tracking, Gmail Sent is the authoritative external audit source when available
-- When Derin gives status updates like applied, contacted, or rejected, update the live dashboard source state as part of the same task
+- When the operator gives status updates like applied, contacted, or rejected, update the live dashboard source state as part of the same task
 - Keep scope tight and avoid speculative feature drift
 
 ## Current Workflow Pattern
@@ -126,4 +126,3 @@ Example live rows currently include companies like:
 - Inspect the current task or requested change
 - Update the SQLite-backed source state first
 - Then regenerate Sheets and the live dashboard if the task touches outreach or listings
-
