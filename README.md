@@ -1,30 +1,18 @@
 # Job Sniper
 
-**Smart job sourcing, automated.**
+Job Sniper is a local-first job research engine for finding relevant opportunities without the noise.
 
-Job Sniper is a tool that helps you find the right opportunities — without the noise. It scans job boards, company career pages, and startup ecosystems, then surfaces only the roles that actually fit your profile and preferences.
+It scans job boards, company career pages, startup sources, and RSS feeds, then ranks jobs and companies against a real profile and city preference. It also enriches company records with public contact routes and contact details so outreach starts with context, not guesswork.
 
-No more doom-scrolling LinkedIn. No more 50 irrelevant recruiter emails a day. Just a focused, daily pipeline of genuinely relevant opportunities.
-
-## Status
-
-Job Sniper is in active development. The core engine works, sourcing from hundreds of signals daily, and we're iterating toward a polished product experience.
+Job Sniper is in active development.
 
 ## What it does
 
 - **Multi-source discovery** — pulls from job boards, ATS systems, startup databases, and RSS feeds in one pass
-- **Smart filtering** — scores and ranks every role against your actual profile, not just keywords
-- **Daily pipeline** — a fresh, curated batch of opportunities delivered every day
-- **Contact intelligence** — enriches company and contact data so you walk in informed
-
-## Philosophy
-
-We believe job hunting should be strategic, not exhausting. Job Sniper is built for people who want to find *the right* role, not *all* the roles. Fewer, better, faster.
+- **Profile-aware filtering** — scores and ranks roles against an actual profile, not just keywords
+- **Daily pipeline** — produces a fresh, curated batch of opportunities every day
+- **Company contact enrichment** — finds public company contacts, contact routes, and outreach-relevant details
 
 ## Tech
 
-TypeScript, built for the terminal. Local-first — your data stays yours.
-
----
-
-Built by [Derin Barutçu](https://derinb.vercel.app) · [GitHub](https://github.com/derinbarutcu17/JobSniper)
+TypeScript, built for the terminal. Local-first, with SQLite as the canonical state store.
