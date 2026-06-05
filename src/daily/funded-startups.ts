@@ -368,7 +368,7 @@ async function enrichFundedCompanies(baseDir: string, deps: Dependencies, compan
   });
 }
 
-export async function ingestFundedBerlinStartups(
+export async function ingestFundedStartups(
   baseDir: string,
   deps: Dependencies,
   sources: FundedStartupSource[],
@@ -421,3 +421,5 @@ export const fundedBerlinInternals = {
   parseHandpickedArticle,
   parseVcPortfolio,
 };
+
+export const ingestFundedBerlinStartups = ingestFundedStartups;
